@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>Workout Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;}
+  input,select,button{font-family:inherit;font-size:14px;}
+  ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:#1e293b;} ::-webkit-scrollbar-thumb{background:#475569;border-radius:2px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState, useEffect, useCallback, useRef} = React;
+
+// ── CONFIG — replace with your Google Cloud OAuth Client ID ──────────────────
+const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE";
+
+const TABS = ["Log","History","Progress","Records","Templates","Settings"];
+const todayStr = () => new Date().toISOString().slice(0,10);
+const genId    = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+const SHEET_SETS      = "Sets";
+const SHEET_PEOPLE    = "People";
+const SHEET_EXERCISES = "Exercises";
+const SHEET_TEMPLATES = "Templates";
+
+const DEFAULT_PEOPLE    = ["Alice","Bob"];
+const DEFAULT_EXERCISES = ["Bench Press","Squat","Deadlift","Overhead Press","Barbell Row","Pull-up"];
+
+// ── Google Sheets API helpers ─────────────────────────────────────────────────
+async function sheetsGet(token, spreadsheetId, range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+  const res = await fetch(url, {headers:{Authorization:`Bearer ${token}`}});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets read error"); }
+  return res.json();
+}
+
+async function sheetsAppend(token, spreadsheetId, range, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+    body: JSON.stringify({values})});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets append error"); }
+  return res.json();
+}
+
+async function sheetsClear(token, spreadsheetId, range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`;
+  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`}});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets clear error"); }
+  return res.json();
+}
+
+async function sheetsUpdate(token, spreadsheetId, range, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  const res = await fetch(url, {method:"PUT", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+    body: JSON.stringify({values})});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets update error"); }
+  return res.json();
+}
+
+async function getSheetNames(token, spreadsheetId) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
+  const res = await fetch(url, {headers:{Authorization:`Bearer ${token}`}});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets metadata error"); }
+  const data = await res.json();
+  return data.sheets.map(s=>s.properties.title);
+}
+
+async function addSheet(token, spreadsheetId, title) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+    body: JSON.stringify({requests:[{addSheet:{properties:{title}}}]})});
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Add sheet error"); }
+  return res.json();
+}
+
+async function ensureSheets(token, spreadsheetId) {
+  const existing = await getSheetNames(token, spreadsheetId);
+  const needed = [
+    {name: SHEET_SETS,      headers: ["WorkoutID","Date","Person","Exercise","Weight","Reps"]},
+    {name: SHEET_PEOPLE,    headers: ["Name"]},
+    {name: SHEET_EXERCISES, headers: ["Name"]},
+    {name: SHEET_TEMPLATES, headers: ["ID","Name","SetsJSON"]},
+  ];
+  for (const s of needed) {
+    if (!existing.includes(s.name)) {
+      await addSheet(token, spreadsheetId, s.name);
+      await sheetsAppend(token, spreadsheetId, `${s.name}!A1`, [s.headers]);
+    }
+  }
+}
+
+function extractSheetId(input) {
+  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : input.trim();
+}
+
+// ── Data load/save ────────────────────────────────────────────────────────────
+async function loadAllData(token, spreadsheetId) {
+  await ensureSheets(token, spreadsheetId);
+
+  const [setsRes, peopleRes, exRes, tplRes] = await Promise.all([
+    sheetsGet(token, spreadsheetId, `${SHEET_SETS}!A:F`),
+    sheetsGet(token, spreadsheetId, `${SHEET_PEOPLE}!A:A`),
+    sheetsGet(token, spreadsheetId, `${SHEET_EXERCISES}!A:A`),
+    sheetsGet(token, spreadsheetId, `${SHEET_TEMPLATES}!A:C`),
+  ]);
+
+  // Parse sets into workout objects
+  const setsRows = (setsRes.values||[]).slice(1).filter(r=>r[0]);
+  const workoutMap = {};
+  setsRows.forEach(r => {
+    const [wid,date,person,exercise,weight,reps] = r;
+    if (!workoutMap[wid]) workoutMap[wid] = {id:wid, date, person, sets:[]};
+    workoutMap[wid].sets.push({exercise, weight:weight||"", reps:reps||""});
+  });
+
+  const people    = (peopleRes.values||[]).slice(1).filter(r=>r[0]).map(r=>r[0]);
+  const exercises = (exRes.values||[]).slice(1).filter(r=>r[0]).map(r=>r[0]);
+  const templates = (tplRes.values||[]).slice(1).filter(r=>r[0]).map(r=>({
+    id:r[0], name:r[1], sets: JSON.parse(r[2]||"[]")
+  }));
+
+  return {
+    logs: Object.values(workoutMap),
+    people: people.length ? people : DEFAULT_PEOPLE,
+    exercises: exercises.length ? exercises : DEFAULT_EXERCISES,
+    templates,
+  };
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const S = {
+  page:        {maxWidth:480,margin:"0 auto",background:"#0f172a",minHeight:"100vh"},
+  header:      {background:"#1e293b",padding:"14px 16px 0",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,.4)"},
+  headerTop:   {display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10},
+  title:       {color:"#38bdf8",fontSize:18,fontWeight:700},
+  tabs:        {display:"flex",gap:2,overflowX:"auto",paddingBottom:0},
+  tab:    (a) =>({padding:"8px 10px",borderRadius:"6px 6px 0 0",border:"none",cursor:"pointer",
+                  background:a?"#0f172a":"transparent",color:a?"#38bdf8":"#94a3b8",fontWeight:a?700:400,fontSize:12,whiteSpace:"nowrap"}),
+  body:        {padding:16},
+  card:        {background:"#1e293b",borderRadius:8,padding:10,marginBottom:8},
+  row:         {display:"flex",gap:8},
+  label:       {fontSize:11,color:"#64748b",marginBottom:3},
+  input:       {width:"100%",background:"#334155",border:"1px solid #475569",borderRadius:6,padding:"9px 10px",color:"#e2e8f0",fontSize:14,outline:"none"},
+  select:      {width:"100%",background:"#334155",border:"1px solid #475569",borderRadius:6,padding:"9px 10px",color:"#e2e8f0",fontSize:14,outline:"none"},
+  btnPrimary:  {background:"#0ea5e9",border:"none",color:"#fff",borderRadius:8,padding:"12px",width:"100%",fontWeight:700,fontSize:15,cursor:"pointer"},
+  btnGhost:    {background:"none",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13},
+  btnDanger:   {background:"none",border:"1px solid #334155",color:"#f87171",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13},
+  sectionTitle:{fontWeight:700,color:"#cbd5e1",fontSize:15,margin:"0 0 10px"},
+  empty:       {textAlign:"center",color:"#475569",marginTop:40,fontSize:14},
+};
+
+function Label({children})          { return <div style={S.label}>{children}</div>; }
+function Inp({style,...p})          { return <input {...p} style={{...S.input,...style}}/>; }
+function Sel({style,children,...p}) { return <select {...p} style={{...S.select,...style}}>{children}</select>; }
+function Spinner({text="Loading…"}) { return <div style={{textAlign:"center",padding:40,color:"#38bdf8",fontSize:14}}>{text}</div>; }
+
+function Modal({title,children,onClose}) {
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:100,display:"flex",alignItems:"flex-end"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#1e293b",borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxHeight:"75vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <strong style={{fontSize:15}}>{title}</strong>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function useGoogleAuth() {
+  const [token, setToken]     = useState(null);
+  const [userInfo, setUserInfo] = useState(null);
+  const tokenRef = useRef(null);
+  const clientRef = useRef(null);
+
+  const requestToken = useCallback(() => {
+    if (!clientRef.current) {
+      clientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile",
+        callback: async (resp) => {
+          if (resp.error) { console.error(resp); return; }
+          tokenRef.current = resp.access_token;
+          setToken(resp.access_token);
+          // Fetch user info
+          const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers:{Authorization:`Bearer ${resp.access_token}`}
+          });
+          const u = await r.json();
+          setUserInfo(u);
+          // Schedule refresh before expiry (tokens last ~1hr)
+          setTimeout(()=>{ if(tokenRef.current) clientRef.current.requestAccessToken({prompt:""}); },
+            (resp.expires_in - 120) * 1000);
+        },
+      });
+    }
+    clientRef.current.requestAccessToken({prompt: token ? "" : "select_account"});
+  }, [token]);
+
+  const signOut = useCallback(() => {
+    if (tokenRef.current) window.google.accounts.oauth2.revoke(tokenRef.current);
+    tokenRef.current = null;
+    setToken(null);
+    setUserInfo(null);
+  }, []);
+
+  return {token, userInfo, requestToken, signOut};
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const {token, userInfo, requestToken, signOut} = useGoogleAuth();
+  const [gsiReady, setGsiReady]   = useState(false);
+  const [tab, setTab]             = useState(0);
+  const [sheetId, setSheetId]     = useState(() => localStorage.getItem("wt_sheetId") || "");
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [logs, setLogs]           = useState([]);
+  const [people, setPeople]       = useState(DEFAULT_PEOPLE);
+  const [exercises, setExercises] = useState(DEFAULT_EXERCISES);
+  const [templates, setTemplates] = useState([]);
+  const [status, setStatus]       = useState(null);
+
+  // Wait for GSI script to load
+  useEffect(()=>{
+    const check = setInterval(()=>{ if(window.google?.accounts?.oauth2){ setGsiReady(true); clearInterval(check); }}, 200);
+    return ()=>clearInterval(check);
+  },[]);
+
+  const showStatus = (s) => { setStatus(s); setTimeout(()=>setStatus(null), s==="error"?4000:2500); };
+
+  const loadData = useCallback(async () => {
+    if (!token || !sheetId) return;
+    setLoading(true); setError("");
+    try {
+      const d = await loadAllData(token, sheetId);
+      setLogs(d.logs); setPeople(d.people); setExercises(d.exercises); setTemplates(d.templates);
+    } catch(e) { setError(e.message); }
+    setLoading(false);
+  }, [token, sheetId]);
+
+  useEffect(()=>{ if(token && sheetId) loadData(); }, [token, sheetId]);
+
+  const saveWorkout = async (workout) => {
+    setLogs(prev=>[...prev, workout]);
+    showStatus("saving");
+    try {
+      const rows = workout.sets.map(s=>[workout.id, workout.date, workout.person, s.exercise, s.weight, s.reps]);
+      await sheetsAppend(token, sheetId, `${SHEET_SETS}!A:F`, rows);
+      showStatus("ok");
+    } catch(e) { showStatus("error"); setLogs(prev=>prev.filter(l=>l.id!==workout.id)); }
+  };
+
+  const deleteWorkout = async (id) => {
+    const prev = [...logs];
+    setLogs(l=>l.filter(x=>x.id!==id));
+    try {
+      // Re-read all sets, filter out the deleted workout, rewrite
+      const res = await sheetsGet(token, sheetId, `${SHEET_SETS}!A:F`);
+      const allRows = (res.values||[]);
+      const header = allRows[0]||["WorkoutID","Date","Person","Exercise","Weight","Reps"];
+      const kept = allRows.slice(1).filter(r=>r[0]!==id);
+      await sheetsClear(token, sheetId, `${SHEET_SETS}!A:F`);
+      await sheetsAppend(token, sheetId, `${SHEET_SETS}!A:F`, [header, ...kept]);
+      showStatus("ok");
+    } catch(e) { showStatus("error"); setLogs(prev); }
+  };
+
+  const savePeople = async (list) => {
+    setPeople(list);
+    try {
+      await sheetsClear(token, sheetId, `${SHEET_PEOPLE}!A:A`);
+      await sheetsAppend(token, sheetId, `${SHEET_PEOPLE}!A:A`, [["Name"],...list.map(p=>[p])]);
+    } catch(e) { showStatus("error"); }
+  };
+
+  const saveExercises = async (list) => {
+    setExercises(list);
+    try {
+      await sheetsClear(token, sheetId, `${SHEET_EXERCISES}!A:A`);
+      await sheetsAppend(token, sheetId, `${SHEET_EXERCISES}!A:A`, [["Name"],...list.map(e=>[e])]);
+    } catch(e) { showStatus("error"); }
+  };
+
+  const saveTemplatesFn = async (list) => {
+    setTemplates(list);
+    try {
+      await sheetsClear(token, sheetId, `${SHEET_TEMPLATES}!A:C`);
+      await sheetsAppend(token, sheetId, `${SHEET_TEMPLATES}!A:C`, [["ID","Name","SetsJSON"],...list.map(t=>[t.id,t.name,JSON.stringify(t.sets)])]);
+    } catch(e) { showStatus("error"); }
+  };
+
+  const StatusBar = () => {
+    if (!status) return null;
+    const cfg = {saving:{color:"#fbbf24",text:"Saving…"},ok:{color:"#4ade80",text:"✓ Saved to Sheets"},error:{color:"#f87171",text:"✗ Save failed"}};
+    const c = cfg[status];
+    return <div style={{position:"fixed",bottom:16,left:"50%",transform:"translateX(-50%)",
+      background:"#1e293b",border:`1px solid ${c.color}`,color:c.color,borderRadius:20,
+      padding:"8px 18px",fontSize:13,zIndex:200,boxShadow:"0 4px 12px rgba(0,0,0,.4)",whiteSpace:"nowrap"}}>{c.text}</div>;
+  };
+
+  // ── Not signed in ──
+  if (!gsiReady || !token) {
+    return (
+      <div style={{...S.page,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+        <div style={{padding:32,textAlign:"center",maxWidth:340}}>
+          <div style={{fontSize:52,marginBottom:16}}>💪</div>
+          <h2 style={{color:"#38bdf8",marginBottom:8,fontSize:22}}>Workout Tracker</h2>
+          <p style={{color:"#94a3b8",marginBottom:32,lineHeight:1.6,fontSize:14}}>
+            Sign in with Google to sync your workouts to your own Google Sheet.
+          </p>
+          <button onClick={requestToken} disabled={!gsiReady}
+            style={{background:"#fff",border:"none",borderRadius:8,padding:"12px 24px",
+              display:"flex",alignItems:"center",gap:10,margin:"0 auto",cursor:"pointer",
+              fontWeight:700,fontSize:15,color:"#1e293b",opacity:gsiReady?1:0.5}}>
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Sign in with Google
+          </button>
+          {!gsiReady && <p style={{color:"#475569",fontSize:12,marginTop:12}}>Loading Google Sign-In…</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Signed in but no sheet yet ──
+  if (!sheetId) {
+    return (
+      <div style={{...S.page,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+        <div style={{padding:32,textAlign:"center",maxWidth:340}}>
+          <div style={{fontSize:52,marginBottom:12}}>📊</div>
+          <h2 style={{color:"#38bdf8",marginBottom:8}}>Connect Your Sheet</h2>
+          <p style={{color:"#94a3b8",marginBottom:24,lineHeight:1.6,fontSize:14}}>
+            Paste the link to a Google Sheet where your workout data will be stored. The app will create the required tabs automatically.
+          </p>
+          <SheetConnectForm onConnect={(id)=>{ localStorage.setItem("wt_sheetId",id); setSheetId(id); }}
+            onSignOut={signOut} userInfo={userInfo}/>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main app ──
+  return (
+    <div style={S.page}>
+      <div style={S.header}>
+        <div style={S.headerTop}>
+          <span style={S.title}>💪 Workout Tracker</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={loadData} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",fontSize:16}}>⟳</button>
+            {userInfo?.picture && <img src={userInfo.picture} style={{width:28,height:28,borderRadius:"50%",cursor:"pointer"}} onClick={()=>setTab(5)} title={userInfo.name}/>}
+          </div>
+        </div>
+        <div style={S.tabs}>
+          {TABS.map((t,i)=><button key={t} style={S.tab(tab===i)} onClick={()=>setTab(i)}>{t}</button>)}
+        </div>
+      </div>
+      <div style={S.body}>
+        {error && <div style={{background:"#450a0a",border:"1px solid #f87171",borderRadius:8,padding:"10px 12px",
+          marginBottom:12,fontSize:13,color:"#fca5a5"}}>{error}
+          <button onClick={loadData} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",marginLeft:8}}>Retry</button>
+        </div>}
+        {loading ? <Spinner/> : (<>
+          {tab===0 && <LogWorkout people={people} exercises={exercises} templates={templates} onSave={saveWorkout}/>}
+          {tab===1 && <History logs={logs} onDelete={deleteWorkout}/>}
+          {tab===2 && <Progress logs={logs} people={people} exercises={exercises}/>}
+          {tab===3 && <Records logs={logs} people={people} exercises={exercises}/>}
+          {tab===4 && <Templates templates={templates} setTemplates={saveTemplatesFn} exercises={exercises}/>}
+          {tab===5 && <Settings people={people} setPeople={savePeople} exercises={exercises}
+            setExercises={saveExercises} sheetId={sheetId} userInfo={userInfo}
+            onChangeSheet={()=>{ localStorage.removeItem("wt_sheetId"); setSheetId(""); setLogs([]); }}
+            onSignOut={()=>{ signOut(); localStorage.removeItem("wt_sheetId"); setSheetId(""); setLogs([]); }}/>}
+        </>)}
+      </div>
+      <StatusBar/>
+    </div>
+  );
+}
+
+function SheetConnectForm({onConnect, onSignOut, userInfo}) {
+  const [val, setVal] = useState("");
+  const [err, setErr] = useState("");
+  const connect = () => {
+    const id = extractSheetId(val);
+    if (!id) { setErr("Please paste a valid Google Sheet link or ID"); return; }
+    onConnect(id);
+  };
+  return (
+    <div>
+      {userInfo && <p style={{color:"#94a3b8",fontSize:13,marginBottom:16}}>Signed in as <strong style={{color:"#e2e8f0"}}>{userInfo.name}</strong></p>}
+      <Inp value={val} onChange={e=>{setVal(e.target.value);setErr("");}}
+        placeholder="https://docs.google.com/spreadsheets/d/..." style={{marginBottom:8,textAlign:"left"}}/>
+      {err && <p style={{color:"#f87171",fontSize:12,marginBottom:8}}>{err}</p>}
+      <button style={{...S.btnPrimary,marginBottom:12}} onClick={connect}>Connect Sheet</button>
+      <button style={{...S.btnGhost,width:"100%"}} onClick={onSignOut}>Sign out</button>
+    </div>
+  );
+}
+
+// ── Log Workout ───────────────────────────────────────────────────────────────
+const emptySet = (exercises) => ({id:genId(), exercise:exercises[0]||"", weight:"", reps:""});
+
+function LogWorkout({people, exercises, templates, onSave}) {
+  const [date, setDate]         = useState(todayStr());
+  const [activePeople, setActivePeople] = useState([people[0]||""]);
+  const [setsMap, setSetsMap]   = useState({[people[0]||""]: [emptySet(exercises)]});
+  const [activeTab, setActiveTab] = useState(people[0]||"");
+  const [saving, setSaving]     = useState(false);
+  const [done, setDone]         = useState(false);
+  const [tplModal, setTplModal] = useState(false);
+  const [addPersonModal, setAddPersonModal] = useState(false);
+
+  useEffect(()=>{
+    if(people.length && !activePeople.some(p=>people.includes(p))) {
+      setActivePeople([people[0]]); setSetsMap({[people[0]]:[emptySet(exercises)]}); setActiveTab(people[0]);
+    }
+  },[people]);
+
+  const addPersonToSession = (p) => {
+    if(activePeople.includes(p)) return;
+    const np = [...activePeople,p];
+    setActivePeople(np); setSetsMap(m=>({...m,[p]:[emptySet(exercises)]})); setActiveTab(p); setAddPersonModal(false);
+  };
+  const removePersonFromSession = (p) => {
+    if(activePeople.length===1) return;
+    const np = activePeople.filter(x=>x!==p);
+    setActivePeople(np); setSetsMap(m=>{const n={...m};delete n[p];return n;});
+    if(activeTab===p) setActiveTab(np[0]);
+  };
+  const addSet    = () => setSetsMap(m=>({...m,[activeTab]:[...m[activeTab],emptySet(exercises)]}));
+  const removeSet = (id) => setSetsMap(m=>({...m,[activeTab]:m[activeTab].filter(s=>s.id!==id)}));
+  const updSet    = (id,f,v) => setSetsMap(m=>({...m,[activeTab]:m[activeTab].map(s=>s.id===id?{...s,[f]:v}:s)}));
+  const loadTpl   = (t) => { setSetsMap(m=>({...m,[activeTab]:t.sets.map(s=>({...s,id:genId()}))})); setTplModal(false); };
+
+  const save = async () => {
+    if(!date||!activePeople.length) return;
+    setSaving(true);
+    await Promise.all(activePeople.map(p=>{
+      const sets=(setsMap[p]||[]).map(({id,...s})=>s).filter(s=>s.exercise);
+      if(!sets.length) return Promise.resolve();
+      return onSave({id:genId(),date,person:p,sets});
+    }));
+    setSaving(false); setDone(true);
+    setTimeout(()=>{
+      setDone(false);
+      const first=activePeople[0];
+      setActivePeople([first]); setSetsMap({[first]:[emptySet(exercises)]}); setActiveTab(first);
+    },1500);
+  };
+
+  const currentSets = setsMap[activeTab]||[];
+  const availableToAdd = people.filter(p=>!activePeople.includes(p));
+
+  return (
+    <div>
+      <div style={{marginBottom:12}}>
+        <Label>Date</Label>
+        <Inp type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {activePeople.map(p=>(
+          <div key={p} onClick={()=>setActiveTab(p)} style={{display:"flex",alignItems:"center",
+            background:activeTab===p?"#0ea5e9":"#1e293b",borderRadius:20,padding:"5px 10px 5px 12px",
+            cursor:"pointer",border:activeTab===p?"none":"1px solid #334155"}}>
+            <span style={{fontSize:13,fontWeight:activeTab===p?700:400,color:activeTab===p?"#fff":"#94a3b8",marginRight:4}}>{p}</span>
+            {activePeople.length>1&&<span onClick={e=>{e.stopPropagation();removePersonFromSession(p);}}
+              style={{color:activeTab===p?"rgba(255,255,255,0.7)":"#64748b",fontSize:16,lineHeight:1,cursor:"pointer"}}>×</span>}
+          </div>
+        ))}
+        {availableToAdd.length>0&&<button onClick={()=>setAddPersonModal(true)}
+          style={{...S.btnGhost,borderRadius:20,padding:"5px 12px",fontSize:13}}>+ Add Person</button>}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontWeight:700,color:"#cbd5e1"}}>{activeTab}'s Sets</span>
+        <button style={S.btnGhost} onClick={()=>setTplModal(true)}>Load Template</button>
+      </div>
+      {currentSets.map((s,i)=>(
+        <div key={s.id} style={S.card}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:12,color:"#64748b"}}>Set {i+1}</span>
+            <button onClick={()=>removeSet(s.id)} style={{background:"none",border:"none",color:"#f87171",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+          <Sel value={s.exercise} onChange={e=>updSet(s.id,"exercise",e.target.value)} style={{marginBottom:8}}>
+            {exercises.map(ex=><option key={ex}>{ex}</option>)}
+          </Sel>
+          <div style={S.row}>
+            <div style={{flex:1}}><Label>Weight (lbs)</Label><Inp type="number" inputMode="decimal" value={s.weight} onChange={e=>updSet(s.id,"weight",e.target.value)} placeholder="0"/></div>
+            <div style={{flex:1}}><Label>Reps</Label><Inp type="number" inputMode="numeric" value={s.reps} onChange={e=>updSet(s.id,"reps",e.target.value)} placeholder="0"/></div>
+          </div>
+        </div>
+      ))}
+      <button style={{...S.btnGhost,width:"100%",padding:"10px",marginBottom:12}} onClick={addSet}>+ Add Set</button>
+      {activePeople.length>1&&(
+        <div style={{background:"#1e293b",borderRadius:8,padding:"10px 12px",marginBottom:12,display:"flex",gap:12,flexWrap:"wrap"}}>
+          {activePeople.map(p=>(
+            <span key={p} style={{fontSize:12,color:activeTab===p?"#38bdf8":"#94a3b8"}}>
+              <strong>{p}:</strong> {(setsMap[p]||[]).length} sets
+            </span>
+          ))}
+        </div>
+      )}
+      <button style={{...S.btnPrimary,opacity:saving?0.7:1}} onClick={save} disabled={saving}>
+        {done?"✓ Saved!":saving?"Saving…":`Save ${activePeople.length>1?"All Workouts":"Workout"}`}
+      </button>
+      {tplModal&&<Modal title={`Load Template → ${activeTab}`} onClose={()=>setTplModal(false)}>
+        {templates.length===0&&<p style={{color:"#94a3b8"}}>No templates yet.</p>}
+        {templates.map(t=><button key={t.id} onClick={()=>loadTpl(t)} style={{display:"block",width:"100%",textAlign:"left",
+          background:"#334155",border:"none",color:"#e2e8f0",borderRadius:8,padding:"10px 12px",marginBottom:8,cursor:"pointer"}}>
+          <strong>{t.name}</strong><span style={{color:"#94a3b8",marginLeft:8,fontSize:13}}>{t.sets.length} sets</span>
+        </button>)}
+      </Modal>}
+      {addPersonModal&&<Modal title="Add Person to Session" onClose={()=>setAddPersonModal(false)}>
+        {availableToAdd.map(p=><button key={p} onClick={()=>addPersonToSession(p)} style={{display:"block",width:"100%",
+          textAlign:"left",background:"#334155",border:"none",color:"#e2e8f0",borderRadius:8,
+          padding:"10px 12px",marginBottom:8,cursor:"pointer",fontSize:14}}>{p}</button>)}
+      </Modal>}
+    </div>
+  );
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function History({logs, onDelete}) {
+  const [expanded, setExpanded] = useState(null);
+  const sorted = [...logs].sort((a,b)=>b.date.localeCompare(a.date));
+  const del = async (id) => { if(confirm("Delete this workout?")) await onDelete(id); };
+  if(!logs.length) return <div style={S.empty}>No workouts logged yet.</div>;
+  return (
+    <div>
+      {sorted.map(log=>(
+        <div key={log.id} style={{...S.card,padding:0,overflow:"hidden"}}>
+          <div onClick={()=>setExpanded(expanded===log.id?null:log.id)}
+            style={{padding:"12px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+            <div><span style={{fontWeight:700,color:"#38bdf8"}}>{log.date}</span><span style={{color:"#94a3b8",marginLeft:8}}>{log.person}</span></div>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <span style={{color:"#64748b",fontSize:12}}>{log.sets.length} sets</span>
+              <span style={{color:"#64748b",fontSize:12}}>{expanded===log.id?"▲":"▼"}</span>
+            </div>
+          </div>
+          {expanded===log.id&&(
+            <div style={{padding:"0 12px 12px"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{color:"#64748b"}}>
+                  <th style={{textAlign:"left",paddingBottom:6}}>Exercise</th>
+                  <th style={{textAlign:"right"}}>Weight</th>
+                  <th style={{textAlign:"right"}}>Reps</th>
+                </tr></thead>
+                <tbody>{log.sets.map((s,i)=>(
+                  <tr key={i} style={{borderTop:"1px solid #334155"}}>
+                    <td style={{padding:"5px 0"}}>{s.exercise}</td>
+                    <td style={{textAlign:"right"}}>{s.weight} lbs</td>
+                    <td style={{textAlign:"right"}}>{s.reps}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <button style={{...S.btnDanger,marginTop:10}} onClick={()=>del(log.id)}>Delete</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Progress ──────────────────────────────────────────────────────────────────
+function Progress({logs, people, exercises}) {
+  const [person, setPerson]     = useState(people[0]||"");
+  const [exercise, setExercise] = useState(exercises[0]||"");
+  const data = logs.filter(l=>l.person===person)
+    .flatMap(l=>l.sets.filter(s=>s.exercise===exercise).map(s=>({date:l.date,weight:+s.weight,reps:+s.reps})))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const maxW=data.length?Math.max(...data.map(d=>d.weight)):0;
+  const W=Math.max(data.length*50,200),H=120;
+  return (
+    <div>
+      <div style={{...S.row,marginBottom:16}}>
+        <Sel style={{flex:1}} value={person} onChange={e=>setPerson(e.target.value)}>{people.map(p=><option key={p}>{p}</option>)}</Sel>
+        <Sel style={{flex:1}} value={exercise} onChange={e=>setExercise(e.target.value)}>{exercises.map(ex=><option key={ex}>{ex}</option>)}</Sel>
+      </div>
+      {!data.length?<div style={S.empty}>No data for this selection.</div>:(<>
+        <div style={{...S.card,overflowX:"auto"}}>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:8}}>Weight over time (lbs)</div>
+          <svg viewBox={`0 0 ${W} ${H+24}`} style={{width:"100%",minWidth:200}}>
+            {data.map((d,i)=>{
+              const x=i*50+25,y=maxW?H-(d.weight/maxW)*(H-14)+6:H/2;
+              return(<g key={i}>
+                {i>0&&(()=>{const px=(i-1)*50+25,py=maxW?H-(data[i-1].weight/maxW)*(H-14)+6:H/2;
+                  return<line x1={px} y1={py} x2={x} y2={y} stroke="#0ea5e9" strokeWidth="2"/>;})()}
+                <circle cx={x} cy={y} r={5} fill="#0ea5e9"/>
+                <text x={x} y={y-9} textAnchor="middle" fill="#e2e8f0" fontSize="11">{d.weight}</text>
+                <text x={x} y={H+18} textAnchor="middle" fill="#64748b" fontSize="9">{d.date.slice(5)}</text>
+              </g>);
+            })}
+          </svg>
+        </div>
+        <div style={S.card}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{color:"#64748b"}}>
+              <th style={{textAlign:"left",paddingBottom:6}}>Date</th><th style={{textAlign:"right"}}>Weight</th>
+              <th style={{textAlign:"right"}}>Reps</th><th style={{textAlign:"right"}}>Δ</th>
+            </tr></thead>
+            <tbody>{data.map((d,i)=>{const diff=i>0?d.weight-data[i-1].weight:null;return(
+              <tr key={i} style={{borderTop:"1px solid #334155"}}>
+                <td style={{padding:"5px 0"}}>{d.date}</td><td style={{textAlign:"right"}}>{d.weight} lbs</td>
+                <td style={{textAlign:"right"}}>{d.reps}</td>
+                <td style={{textAlign:"right",color:diff>0?"#4ade80":diff<0?"#f87171":"#94a3b8"}}>{diff===null?"—":diff>0?`+${diff}`:diff}</td>
+              </tr>);})}</tbody>
+          </table>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
+// ── Records ───────────────────────────────────────────────────────────────────
+function Records({logs, people, exercises}) {
+  const [person, setPerson] = useState(people[0]||"");
+  const recs={};
+  exercises.forEach(ex=>{recs[ex]={weight:0,reps:0,date:""};});
+  logs.filter(l=>l.person===person).forEach(l=>{
+    l.sets.forEach(s=>{
+      if(!recs[s.exercise]) recs[s.exercise]={weight:0,reps:0,date:""};
+      if(+s.weight>recs[s.exercise].weight) recs[s.exercise]={weight:+s.weight,reps:+s.reps,date:l.date};
+    });
+  });
+  const hasData=Object.values(recs).some(r=>r.weight>0);
+  return (
+    <div>
+      <Sel style={{marginBottom:12}} value={person} onChange={e=>setPerson(e.target.value)}>{people.map(p=><option key={p}>{p}</option>)}</Sel>
+      {!hasData?<div style={S.empty}>No records for {person} yet.</div>:(
+        <div style={{background:"#1e293b",borderRadius:8,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{background:"#334155",color:"#94a3b8"}}>
+              <th style={{padding:"9px 12px",textAlign:"left"}}>Exercise</th>
+              <th style={{textAlign:"right",padding:"9px 8px"}}>Max</th>
+              <th style={{textAlign:"right",padding:"9px 12px"}}>Reps</th>
+            </tr></thead>
+            <tbody>{Object.entries(recs).filter(([,v])=>v.weight>0).map(([ex,v])=>(
+              <tr key={ex} style={{borderTop:"1px solid #334155"}}>
+                <td style={{padding:"8px 12px"}}><div>{ex}</div><div style={{fontSize:11,color:"#64748b"}}>{v.date}</div></td>
+                <td style={{textAlign:"right",padding:"8px",color:"#fbbf24",fontWeight:700}}>{v.weight} lbs</td>
+                <td style={{textAlign:"right",padding:"8px 12px"}}>{v.reps}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+function Templates({templates, setTemplates, exercises}) {
+  const [show,setShow]=useState(false);const [editing,setEditing]=useState(null);
+  const [name,setName]=useState("");const [sets,setSets]=useState([emptySet(exercises)]);
+  const startNew=()=>{setName("");setSets([emptySet(exercises)]);setEditing(null);setShow(true);};
+  const startEdit=(t)=>{setName(t.name);setSets(t.sets.map(s=>({...s,id:genId()})));setEditing(t.id);setShow(true);};
+  const addSet=()=>setSets(s=>[...s,emptySet(exercises)]);
+  const removeSet=(id)=>setSets(s=>s.filter(x=>x.id!==id));
+  const updSet=(id,f,v)=>setSets(s=>s.map(x=>x.id===id?{...x,[f]:v}:x));
+  const save=()=>{if(!name.trim())return;const entry={id:editing||genId(),name,sets:sets.map(({id,...s})=>s)};setTemplates(editing?templates.map(t=>t.id===editing?entry:t):[...templates,entry]);setShow(false);};
+  const del=(id)=>{if(confirm("Delete template?"))setTemplates(templates.filter(t=>t.id!==id));};
+  if(show) return(
+    <div>
+      <button style={S.btnGhost} onClick={()=>setShow(false)}>← Back</button>
+      <h3 style={{margin:"14px 0 10px",color:"#cbd5e1"}}>{editing?"Edit":"New"} Template</h3>
+      <Inp value={name} onChange={e=>setName(e.target.value)} placeholder="Template name" style={{marginBottom:12}}/>
+      {sets.map((s,i)=>(
+        <div key={s.id} style={S.card}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:12,color:"#64748b"}}>Set {i+1}</span>
+            <button onClick={()=>removeSet(s.id)} style={{background:"none",border:"none",color:"#f87171",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+          <Sel value={s.exercise} onChange={e=>updSet(s.id,"exercise",e.target.value)} style={{marginBottom:8}}>{exercises.map(ex=><option key={ex}>{ex}</option>)}</Sel>
+          <div style={S.row}>
+            <div style={{flex:1}}><Label>Weight</Label><Inp type="number" inputMode="decimal" value={s.weight} onChange={e=>updSet(s.id,"weight",e.target.value)} placeholder="0"/></div>
+            <div style={{flex:1}}><Label>Reps</Label><Inp type="number" inputMode="numeric" value={s.reps} onChange={e=>updSet(s.id,"reps",e.target.value)} placeholder="0"/></div>
+          </div>
+        </div>
+      ))}
+      <button style={{...S.btnGhost,width:"100%",padding:"10px",marginBottom:12}} onClick={addSet}>+ Add Set</button>
+      <button style={S.btnPrimary} onClick={save}>Save Template</button>
+    </div>
+  );
+  return(
+    <div>
+      <button style={{...S.btnPrimary,marginBottom:16}} onClick={startNew}>+ New Template</button>
+      {templates.length===0&&<div style={S.empty}>No templates yet.</div>}
+      {templates.map(t=>(
+        <div key={t.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700}}>{t.name}</div><div style={{fontSize:12,color:"#94a3b8"}}>{t.sets.length} sets · {[...new Set(t.sets.map(s=>s.exercise))].slice(0,3).join(", ")}</div></div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={S.btnGhost} onClick={()=>startEdit(t)}>Edit</button>
+            <button style={S.btnDanger} onClick={()=>del(t.id)}>Del</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function Settings({people,setPeople,exercises,setExercises,sheetId,userInfo,onChangeSheet,onSignOut}) {
+  const [newPerson,setNewPerson]=useState("");
+  const [newEx,setNewEx]=useState("");
+  const addPerson=()=>{if(newPerson.trim()&&!people.includes(newPerson)){setPeople([...people,newPerson]);setNewPerson("");}};
+  const addEx=()=>{if(newEx.trim()&&!exercises.includes(newEx)){setExercises([...exercises,newEx]);setNewEx("");}};
+  return(
+    <div>
+      {/* Account */}
+      <div style={{marginBottom:20}}>
+        <h3 style={S.sectionTitle}>👤 Account</h3>
+        <div style={{...S.card,display:"flex",alignItems:"center",gap:12}}>
+          {userInfo?.picture&&<img src={userInfo.picture} style={{width:40,height:40,borderRadius:"50%"}}/>}
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700}}>{userInfo?.name}</div>
+            <div style={{fontSize:12,color:"#94a3b8"}}>{userInfo?.email}</div>
+          </div>
+        </div>
+        <div style={{...S.row,marginTop:8}}>
+          <button style={{...S.btnGhost,flex:1}} onClick={onChangeSheet}>Change Sheet</button>
+          <button style={{...S.btnDanger,flex:1}} onClick={onSignOut}>Sign Out</button>
+        </div>
+        <div style={{marginTop:8,fontSize:11,color:"#475569",wordBreak:"break-all"}}>
+          Sheet ID: {sheetId}
+        </div>
+      </div>
+      {/* People */}
+      <div style={{marginBottom:20}}>
+        <h3 style={S.sectionTitle}>People</h3>
+        <div style={{...S.row,marginBottom:10}}>
+          <Inp value={newPerson} onChange={e=>setNewPerson(e.target.value)} placeholder="Add person" onKeyDown={e=>e.key==="Enter"&&addPerson()}/>
+          <button style={{...S.btnPrimary,width:"auto",padding:"0 16px"}} onClick={addPerson}>Add</button>
+        </div>
+        {people.map(p=>(
+          <div key={p} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{p}</span>
+            <button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer"}} onClick={()=>setPeople(people.filter(x=>x!==p))}>Remove</button>
+          </div>
+        ))}
+      </div>
+      {/* Exercises */}
+      <div style={{marginBottom:20}}>
+        <h3 style={S.sectionTitle}>Exercises</h3>
+        <div style={{...S.row,marginBottom:10}}>
+          <Inp value={newEx} onChange={e=>setNewEx(e.target.value)} placeholder="Add exercise" onKeyDown={e=>e.key==="Enter"&&addEx()}/>
+          <button style={{...S.btnPrimary,width:"auto",padding:"0 16px"}} onClick={addEx}>Add</button>
+        </div>
+        {exercises.map(ex=>(
+          <div key={ex} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{ex}</span>
+            <button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer"}} onClick={()=>setExercises(exercises.filter(x=>x!==ex))}>Remove</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
