@@ -4,145 +4,310 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="theme-color" content="#0f172a"/>
-<title>Workout Tracker</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="theme-color" content="#f3f2f2"/>
+<title>The Daily Lift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-  body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;}
-  input,select,button,textarea{font-family:inherit;font-size:14px;}
-  ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:#1e293b;} ::-webkit-scrollbar-thumb{background:#475569;border-radius:2px;}
+:root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #0088b0;
+  --color-accent-2: #d6006c;
+  --color-divider: color-mix(in srgb, #201e1d 16%, transparent);
+
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #e9f8ff;
+  --color-accent-200: #cbeeff;
+  --color-accent-300: #99e0ff;
+  --color-accent-400: #62c5ee;
+  --color-accent-500: #38a6cf;
+  --color-accent-600: #1186ac;
+  --color-accent-700: #006786;
+  --color-accent-800: #004961;
+  --color-accent-900: #0a303e;
+
+  --color-accent-2-100: #fff1f4;
+  --color-accent-2-200: #ffdee6;
+  --color-accent-2-300: #ffc0d0;
+  --color-accent-2-400: #ff90b1;
+  --color-accent-2-500: #ff458e;
+  --color-accent-2-600: #d82071;
+  --color-accent-2-700: #aa0b56;
+  --color-accent-2-800: #790e3d;
+  --color-accent-2-900: #4b1528;
+
+  --font-heading: "Source Serif 4", system-ui, sans-serif;
+  --font-heading-weight: 600;
+  --font-body: "Source Serif 4", system-ui, sans-serif;
+
+  --space-1: 5px; --space-2: 10px; --space-3: 15px; --space-4: 20px; --space-6: 30px; --space-8: 40px;
+  --radius-sm: 1px; --radius-md: 2px; --radius-lg: 4px;
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; background: var(--color-neutral-300); }
+body { color: var(--color-text); font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+button, input, select { font-family: inherit; }
+a { color: var(--color-accent-700); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--color-neutral-200); }
+::-webkit-scrollbar-thumb { background: var(--color-neutral-500); border-radius: 2px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; text-decoration: none;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  font-size: 14px; line-height: 1.2; color: var(--color-text);
+  background: transparent; border: 1px solid transparent;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border-radius: var(--radius-md);
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary { background: var(--color-accent); color: var(--color-bg); }
+.btn-primary:hover:not(:disabled) { background: var(--color-accent-600); }
+.btn-primary:active:not(:disabled) { background: var(--color-accent-700); }
+.btn-secondary { border-color: var(--color-divider); }
+.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.btn-secondary:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.btn-ghost { color: var(--color-accent-700); padding-inline: var(--space-1); }
+.btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.btn-ghost:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+
+.field > label { display: block; font-size: 12px; margin-bottom: 5px; color: color-mix(in srgb, var(--color-text) 70%, transparent); }
+.input {
+  width: 100%; min-height: 40px; padding: 8px 10px; font: inherit; font-size: 15px;
+  color: var(--color-text); caret-color: var(--color-accent); background: var(--color-surface);
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+}
+.input::placeholder { color: color-mix(in srgb, var(--color-text) 65%, transparent); opacity: 1; }
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
+
+.seg { display: flex; overflow: hidden; border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+.seg-opt {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex: 1; min-height: 44px; padding: 0 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
+.seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-bg); }
+.seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.seg-opt input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+
+.dialog-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: var(--space-4); background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent); z-index: 100; }
+.dialog { width: min(340px, 100%); display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-lg); }
+.dialog-title { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 20px; }
+.dialog-body { font-size: 14px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+.tabular { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState, useEffect, useCallback, useRef} = React;
+const {useState, useEffect, useRef, useCallback} = React;
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const TABS = ["Log","History","Progress","Records","Templates","AI Workout","Settings"];
-const TAB_ICON = {Log:"📝",History:"📊",Progress:"📈",Records:"🏆",Templates:"📋","AI Workout":"🤖",Settings:"⚙️"};
-const todayStr = () => new Date().toISOString().slice(0,10);
-const genId    = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+/* ── Constants ──────────────────────────────────────────────────────────── */
+const NAV = [
+  {k: "home", l: "Today"}, {k: "history", l: "History"}, {k: "progress", l: "Progress"},
+  {k: "coach", l: "Coach"}, {k: "settings", l: "Settings"},
+];
+const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const oldDate = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
 
-const DEFAULT_PEOPLE    = ["Alice","Bob"];
-const DEFAULT_EXERCISES = ["Bench Press","Squat","Deadlift","Overhead Press","Barbell Row","Pull-up"];
+const SEED_ROUTINES = [
+  {id: "r1", name: "Push Day", note: "Chest, shoulders, triceps", last: "2026-08-22", ex: [
+    {name: "Bench Press", sets: 3, reps: 8, weight: 135, cue: "Elbows tucked, drive through the floor."},
+    {name: "Overhead Press", sets: 3, reps: 10, weight: 65, cue: "Ribs down, press to a locked overhead."},
+    {name: "Incline Dumbbell Press", sets: 3, reps: 10, weight: 40, cue: "Slow on the way down."},
+    {name: "Triceps Pushdown", sets: 3, reps: 12, weight: 50, cue: "Keep the elbows pinned."},
+  ]},
+  {id: "r2", name: "Pull Day", note: "Back and biceps", last: "2026-08-20", ex: [
+    {name: "Deadlift", sets: 3, reps: 5, weight: 225, cue: "Neutral spine, bar close to the shins."},
+    {name: "Barbell Row", sets: 3, reps: 8, weight: 115, cue: "Pull to the belly, no heaving."},
+    {name: "Pull-up", sets: 3, reps: 8, weight: 0, cue: "Full hang at the bottom."},
+    {name: "Face Pull", sets: 3, reps: 15, weight: 30, cue: "High elbows, pull to the eyes."},
+  ]},
+  {id: "r3", name: "Leg Day", note: "Quads, hamstrings, calves", last: "2026-08-18", ex: [
+    {name: "Squat", sets: 4, reps: 6, weight: 185, cue: "Knees track over the toes."},
+    {name: "Romanian Deadlift", sets: 3, reps: 8, weight: 135, cue: "Hinge at the hips, soft knees."},
+    {name: "Leg Press", sets: 3, reps: 12, weight: 230, cue: "Stop short of locking out."},
+    {name: "Calf Raise", sets: 3, reps: 15, weight: 90, cue: "Pause at the top."},
+  ]},
+  {id: "r4", name: "Express Full Body", note: "Twenty minutes, no kit", last: "2026-08-15", ex: [
+    {name: "Goblet Squat", sets: 3, reps: 12, weight: 35, cue: "Chest tall, elbows inside the knees."},
+    {name: "Push-up", sets: 3, reps: 15, weight: 0, cue: "One straight line, head to heels."},
+    {name: "Dumbbell Row", sets: 3, reps: 12, weight: 45, cue: "One side at a time."},
+  ]},
+];
+const SEED_HISTORY = [
+  {id: "h1", date: "2026-08-22", name: "Push Day", sets: 12, mins: 41},
+  {id: "h2", date: "2026-08-20", name: "Pull Day", sets: 12, mins: 46},
+  {id: "h3", date: "2026-08-18", name: "Leg Day", sets: 13, mins: 52},
+  {id: "h4", date: "2026-08-15", name: "Express Full Body", sets: 9, mins: 22},
+  {id: "h5", date: "2026-08-13", name: "Push Day", sets: 12, mins: 39},
+  {id: "h6", date: "2026-08-11", name: "Pull Day", sets: 11, mins: 44},
+  {id: "h7", date: "2026-08-06", name: "Leg Day", sets: 13, mins: 50},
+  {id: "h8", date: "2026-07-30", name: "Push Day", sets: 12, mins: 43},
+];
+const DEFAULT_PREFS = {view: "exercise", rest: "manual", secs: 90};
 
-// ── IndexedDB layer ──────────────────────────────────────────────────────────
-const DB_NAME    = "WorkoutTrackerDB";
-const DB_VERSION = 1;
-const STORE_WORKOUTS    = "workouts";
-const STORE_TEMPLATES   = "templates";
-const STORE_AI_WORKOUTS = "aiWorkouts";
-const STORE_KV          = "kv";
+/* ── IndexedDB ──────────────────────────────────────────────────────────── */
+const DB_NAME = "WorkoutTrackerDB";
+const DB_VERSION = 2;
 
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_WORKOUTS))    db.createObjectStore(STORE_WORKOUTS, {keyPath:"id"});
-      if (!db.objectStoreNames.contains(STORE_TEMPLATES))   db.createObjectStore(STORE_TEMPLATES, {keyPath:"id"});
-      if (!db.objectStoreNames.contains(STORE_AI_WORKOUTS)) db.createObjectStore(STORE_AI_WORKOUTS, {keyPath:"id"});
-      if (!db.objectStoreNames.contains(STORE_KV))          db.createObjectStore(STORE_KV);
+      // legacy v1 stores (kept only as a migration source)
+      if (!db.objectStoreNames.contains("workouts")) db.createObjectStore("workouts", {keyPath: "id"});
+      if (!db.objectStoreNames.contains("templates")) db.createObjectStore("templates", {keyPath: "id"});
+      if (!db.objectStoreNames.contains("aiWorkouts")) db.createObjectStore("aiWorkouts", {keyPath: "id"});
+      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+      // v2 — Daily Lift schema
+      if (!db.objectStoreNames.contains("routines")) db.createObjectStore("routines", {keyPath: "id"});
+      if (!db.objectStoreNames.contains("history")) db.createObjectStore("history", {keyPath: "id"});
+      if (!db.objectStoreNames.contains("prefs")) db.createObjectStore("prefs");
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
+    req.onerror = () => reject(req.error);
   });
 }
-
-async function idbGetAll(storeName) {
+async function idbGetAll(store) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const req = tx.objectStore(storeName).getAll();
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).getAll();
     req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
+    req.onerror = () => reject(req.error);
   });
 }
-
-async function idbGet(storeName, key) {
+async function idbGet(store, key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const req = tx.objectStore(storeName).get(key);
+    const tx = db.transaction(store, "readonly");
+    const req = tx.objectStore(store).get(key);
     req.onsuccess = () => resolve(req.result);
-    req.onerror   = () => reject(req.error);
+    req.onerror = () => reject(req.error);
   });
 }
-
-async function idbPut(storeName, value, key) {
+async function idbPut(store, value, key) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    if (key !== undefined) tx.objectStore(storeName).put(value, key);
-    else tx.objectStore(storeName).put(value);
+    const tx = db.transaction(store, "readwrite");
+    if (key !== undefined) tx.objectStore(store).put(value, key); else tx.objectStore(store).put(value);
     tx.oncomplete = () => resolve();
-    tx.onerror    = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
   });
 }
-
-async function idbPutMany(storeName, values) {
+async function idbReplaceAll(store, values) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    values.forEach(v => store.put(v));
+    const tx = db.transaction(store, "readwrite");
+    const os = tx.objectStore(store);
+    os.clear();
+    values.forEach(v => os.put(v));
     tx.oncomplete = () => resolve();
-    tx.onerror    = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-async function idbDelete(storeName, key) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    tx.objectStore(storeName).delete(key);
-    tx.oncomplete = () => resolve();
-    tx.onerror    = () => reject(tx.error);
+/* ── Migration from the old Google-Sheets-era schema ───────────────────── */
+function templateToRoutine(t) {
+  const byName = new Map();
+  (t.sets || []).forEach(s => {
+    const key = s.exercise || "Exercise";
+    if (!byName.has(key)) byName.set(key, {name: key, sets: 0, reps: Number(s.reps) || 1, weight: Number(s.weight) || 0, cue: ""});
+    byName.get(key).sets += 1;
   });
+  const ex = [...byName.values()];
+  return {id: t.id || genId(), name: t.name || "Migrated routine", note: "Migrated template", last: oldDate(30),
+    ex: ex.length ? ex : [{name: "Exercise", sets: 3, reps: 10, weight: 0, cue: ""}]};
+}
+function aiWorkoutToRoutine(w) {
+  const main = (w.workout && w.workout.main) || [];
+  const ex = main.map(m => ({
+    name: m.name || "Exercise",
+    sets: Math.max(1, parseInt(m.sets, 10) || 3),
+    reps: Math.max(1, parseInt(String(m.reps || "").match(/\d+/)?.[0] || "10", 10)),
+    weight: 0, cue: m.description || "",
+  }));
+  return {id: w.id || genId(), name: (w.workout && w.workout.title) || w.title || "AI workout", note: "Migrated AI workout", last: oldDate(30),
+    ex: ex.length ? ex : [{name: "Exercise", sets: 3, reps: 10, weight: 0, cue: ""}]};
+}
+function workoutToHistory(w) {
+  const byName = new Map();
+  (w.sets || []).forEach(s => {
+    const key = s.exercise || "Exercise";
+    if (!byName.has(key)) byName.set(key, {name: key, count: 0, weight: Number(s.weight) || 0, reps: Number(s.reps) || 0});
+    byName.get(key).count += 1;
+  });
+  const detail = [...byName.values()].map(e => ({name: e.name, target: `${e.count} × ${e.weight ? e.weight + " lb × " + e.reps : e.reps + " reps"}`}));
+  const setsTotal = (w.sets || []).length;
+  return {id: w.id || genId(), date: w.date, name: `${w.person || "Workout"}`, sets: setsTotal, mins: Math.max(5, setsTotal * 3), detail};
 }
 
-async function idbClear(storeName) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    tx.objectStore(storeName).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror    = () => reject(tx.error);
-  });
+async function loadAppState() {
+  let prefs = await idbGet("prefs", "prefs");
+  let routines = await idbGetAll("routines");
+  let history = await idbGetAll("history");
+
+  if (!prefs) {
+    const [legacyWorkouts, legacyTemplates, legacyAi] = await Promise.all([
+      idbGetAll("workouts"), idbGetAll("templates"), idbGetAll("aiWorkouts"),
+    ]);
+    const hasLegacy = legacyWorkouts.length || legacyTemplates.length || legacyAi.length;
+    if (hasLegacy) {
+      routines = [...legacyTemplates.map(templateToRoutine), ...legacyAi.map(aiWorkoutToRoutine)];
+      history = legacyWorkouts.map(workoutToHistory);
+    } else if (!routines.length && !history.length) {
+      routines = JSON.parse(JSON.stringify(SEED_ROUTINES));
+      history = SEED_HISTORY.slice();
+    }
+    prefs = {...DEFAULT_PREFS};
+    await idbReplaceAll("routines", routines);
+    await idbReplaceAll("history", history);
+    await idbPut("prefs", prefs, "prefs");
+  }
+  return {routines, history: sortHistory(history), prefs};
 }
 
-function dedupe(arr) { return [...new Set(arr.filter(Boolean))]; }
+/* ── Claude AI (Coach) ──────────────────────────────────────────────────── */
+async function callClaudeForRoutine(apiKey, {minutes, focus, equipment}) {
+  const prompt = `You are a strength coach. Build ONE workout routine as strict JSON (no markdown, no prose) matching exactly this shape:
+{"name": "short routine name", "note": "one short line describing the routine", "ex": [{"name": "Exercise name", "sets": <int>, "reps": <int>, "weight": <int, pounds, 0 for bodyweight>, "cue": "one short coaching cue"}]}
 
-// ── Claude AI integration ───────────────────────────────────────────────────
-async function generateWorkoutWithClaude(apiKey, preferences) {
-  const prompt = `You are a professional fitness coach. Generate a customized workout routine based on these preferences:
-
-Fitness Level: ${preferences.fitnessLevel}
-Time Available: ${preferences.timeAvailable} minutes
-Goal: ${preferences.goal}
-Equipment: ${preferences.equipment}
-Focus Area: ${preferences.focusArea}
-Special Notes: ${preferences.notes || "None"}
-
-Generate a complete workout in this exact JSON format (no markdown, just JSON):
-{
-  "title": "Brief workout name",
-  "warmup": [
-    {"name": "Exercise name", "duration": "5 min", "description": "Description", "videoQuery": "search term for YouTube"}
-  ],
-  "main": [
-    {"name": "Exercise name", "sets": 3, "reps": "8-10", "description": "Form cues", "videoQuery": "search term for YouTube"}
-  ],
-  "cooldown": [
-    {"name": "Stretch name", "duration": "2 min", "description": "Description"}
-  ],
-  "notes": "Any safety tips or modifications"
-}`;
+Constraints:
+- Time available: ${minutes} minutes total — scale exercise count and sets to fit (roughly 3 exercises x 2 sets for 20 min, 4 exercises x 3 sets for 30-45 min, 4-5 exercises x 4 sets for 60 min)
+- Focus: ${focus}
+- Equipment: ${equipment} — if "Bodyweight only", every exercise must use weight: 0
+- Weight values are working weights in pounds, sensible for an intermediate lifter; use 0 for bodyweight moves
+- Keep names and cues concise, in the style of a terse workout log, no emoji`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -152,878 +317,633 @@ Generate a complete workout in this exact JSON format (no markdown, just JSON):
       "anthropic-dangerous-direct-browser-access": "true",
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      max_tokens: 1500,
-      messages: [
-        { role: "user", content: prompt }
-      ],
-    }),
+    body: JSON.stringify({model: "claude-sonnet-5", max_tokens: 1000, messages: [{role: "user", content: prompt}]}),
   });
-
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || "Claude API error");
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error?.message || "Claude API error");
   }
-
   const data = await response.json();
-  const textContent = data.content[0].text;
-
-  const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Invalid response format");
-
-  return JSON.parse(jsonMatch[0]);
+  const text = data.content[0].text;
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("Invalid response format");
+  const parsed = JSON.parse(match[0]);
+  const ex = (parsed.ex || []).map(e => ({
+    name: e.name || "Exercise",
+    sets: Math.max(1, parseInt(e.sets, 10) || 3),
+    reps: Math.max(1, parseInt(e.reps, 10) || 10),
+    weight: Math.max(0, parseInt(e.weight, 10) || 0),
+    cue: e.cue || "",
+  }));
+  if (!ex.length) throw new Error("Claude didn't return any exercises");
+  return {
+    id: "r" + Date.now(), name: parsed.name || `${focus} · ${minutes} min`,
+    note: parsed.note || `${equipment}, built just now`, last: "2000-01-01", ex,
+  };
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const S = {
-  page:        {maxWidth:480,margin:"0 auto",background:"#0f172a",minHeight:"100vh"},
-  header:      {background:"#1e293b",padding:"14px 16px 0",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,.4)"},
-  headerTop:   {display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10},
-  title:       {color:"#38bdf8",fontSize:18,fontWeight:700},
-  tabs:        {display:"flex",gap:2,overflowX:"auto",paddingBottom:0},
-  tab:    (a) =>({padding:"8px 10px",borderRadius:"6px 6px 0 0",border:"none",cursor:"pointer",
-                  background:a?"#0f172a":"transparent",color:a?"#38bdf8":"#94a3b8",fontWeight:a?700:400,fontSize:12,whiteSpace:"nowrap"}),
-  body:        {padding:16,paddingBottom:40},
-  card:        {background:"#1e293b",borderRadius:8,padding:10,marginBottom:8},
-  cardAI:      {background:"#1e293b",borderRadius:8,padding:14,marginBottom:12,borderLeft:"3px solid #8b5cf6",cursor:"pointer"},
-  row:         {display:"flex",gap:8},
-  label:       {fontSize:11,color:"#64748b",marginBottom:3},
-  input:       {width:"100%",background:"#334155",border:"1px solid #475569",borderRadius:6,padding:"9px 10px",color:"#e2e8f0",fontSize:14,outline:"none"},
-  select:      {width:"100%",background:"#334155",border:"1px solid #475569",borderRadius:6,padding:"9px 10px",color:"#e2e8f0",fontSize:14,outline:"none"},
-  btnPrimary:  {background:"#0ea5e9",border:"none",color:"#fff",borderRadius:8,padding:"12px",width:"100%",fontWeight:700,fontSize:15,cursor:"pointer"},
-  btnGhost:    {background:"none",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13},
-  btnDanger:   {background:"none",border:"1px solid #334155",color:"#f87171",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13},
-  sectionTitle:{fontWeight:700,color:"#cbd5e1",fontSize:15,margin:"0 0 10px"},
-  empty:       {textAlign:"center",color:"#475569",marginTop:40,fontSize:14},
-  toggle: (a) => ({flex:1,padding:"9px",borderRadius:8,border:a?"none":"1px solid #334155",
-                    background:a?"#8b5cf6":"transparent",color:a?"#fff":"#94a3b8",fontWeight:a?700:400,cursor:"pointer"}),
-};
+/* ── Helpers mirroring the design reference's state machine ───────────── */
+function fmtDate(iso) {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric"});
+}
+function agoText(iso) {
+  const days = Math.round((Date.now() - new Date(iso + "T12:00:00").getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 14) return days + " days ago";
+  return Math.floor(days / 7) + " weeks ago";
+}
+function target(e) { return e.weight ? e.weight + " lb × " + e.reps : e.reps + " reps"; }
+function targetAt(e, w) { return w ? w + " lb × " + e.reps : e.reps + " reps"; }
+function totalSets(r) { return r.ex.reduce((n, e) => n + e.sets, 0); }
+function listNames(r) { return r.ex.map(e => e.name).join(" · "); }
+function sortHistory(arr) {
+  return [...arr].sort((a, b) => b.date.localeCompare(a.date) || ((b.ts || 0) - (a.ts || 0)));
+}
 
-function Label({children})          { return <div style={S.label}>{children}</div>; }
-function Inp({style,...p})          { return <input {...p} style={{...S.input,...style}}/>; }
-function Sel({style,children,...p}) { return <select {...p} style={{...S.select,...style}}>{children}</select>; }
-function Spinner({text="Loading…"}) { return <div style={{textAlign:"center",padding:40,color:"#38bdf8",fontSize:14}}>{text}</div>; }
-
-function Modal({title,children,onClose}) {
+/* ── Small UI atoms ─────────────────────────────────────────────────────── */
+function Btn({variant = "primary", style, children, ...p}) {
+  return <button className={`btn btn-${variant}`} style={style} {...p}>{children}</button>;
+}
+function Seg({name, value, options, onChange}) {
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:100,display:"flex",alignItems:"flex-end"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#1e293b",borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"75vh",overflowY:"auto"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <strong style={{fontSize:15}}>{title}</strong>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
-        </div>
-        {children}
+    <div className="seg">
+      {options.map(o => (
+        <label key={o.value} className="seg-opt">
+          <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value)}/>
+          {o.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+const kicker = (color) => ({fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color});
+
+/* ── Masthead + tab bar ─────────────────────────────────────────────────── */
+function Masthead({sessionsLogged}) {
+  const today = new Date().toLocaleDateString("en-US", {weekday: "long", month: "long", day: "numeric"});
+  return (
+    <div style={{padding: "26px 20px 0"}}>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 34, letterSpacing: "-0.5px", lineHeight: 1}}>The Daily Lift</div>
+      <div style={{height: 4, background: "var(--color-text)", marginTop: 14}}/>
+      <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--color-neutral-700)"}}>
+        <span>{today}</span>
+        <span>{sessionsLogged} sessions logged</span>
+      </div>
+      <div style={{height: 1, background: "var(--color-text)"}}/>
+    </div>
+  );
+}
+function TabBar({screen, onGo}) {
+  return (
+    <div style={{position: "fixed", bottom: 0, width: "100%", maxWidth: 430, background: "var(--color-bg)", borderTop: "1px solid var(--color-text)"}}>
+      <div style={{display: "flex"}}>
+        {NAV.map(n => (
+          <button key={n.k} onClick={() => onGo(n.k)} style={{flex: 1, minHeight: 56, background: "none", border: "none", cursor: "pointer",
+            padding: "8px 2px", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
+            color: screen === n.k ? "var(--color-accent-700)" : "var(--color-neutral-700)"}}>{n.l}</button>
+        ))}
       </div>
     </div>
   );
 }
 
-const emptySet = (exercises) => ({id:genId(), exercise:exercises[0]||"", weight:"", reps:""});
-
-// ── App ───────────────────────────────────────────────────────────────────────
-function App() {
-  const [tab, setTab]         = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
-  const [status, setStatus]   = useState(null);
-  const [data, setData]       = useState({workouts:[], people:DEFAULT_PEOPLE, exercises:DEFAULT_EXERCISES, templates:[], aiWorkouts:[]});
-  const [apiKey, setApiKey]   = useState(() => sessionStorage.getItem("claudeApiKey") || "");
-  const [importPending, setImportPending] = useState(null);
-
-  const showStatus = (s) => { setStatus(s); setTimeout(()=>setStatus(null), s==="error"?4000:2000); };
-
-  const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try {
-      const [workouts, templates, aiWorkouts, people, exercises] = await Promise.all([
-        idbGetAll(STORE_WORKOUTS),
-        idbGetAll(STORE_TEMPLATES),
-        idbGetAll(STORE_AI_WORKOUTS),
-        idbGet(STORE_KV, "people"),
-        idbGet(STORE_KV, "exercises"),
-      ]);
-      const finalPeople    = (people && people.length) ? people : DEFAULT_PEOPLE;
-      const finalExercises = (exercises && exercises.length) ? exercises : DEFAULT_EXERCISES;
-      if (!people)    await idbPut(STORE_KV, finalPeople, "people");
-      if (!exercises) await idbPut(STORE_KV, finalExercises, "exercises");
-      setData({workouts, templates, aiWorkouts, people:finalPeople, exercises:finalExercises});
-    } catch (e) {
-      setError(e.message);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  // ── Workouts ──
-  const saveWorkout = async (workout) => {
-    setData(d => ({...d, workouts:[...d.workouts, workout]}));
-    showStatus("saving");
-    try { await idbPut(STORE_WORKOUTS, workout); showStatus("ok"); }
-    catch (e) { showStatus("error"); setData(d => ({...d, workouts:d.workouts.filter(w=>w.id!==workout.id)})); }
-  };
-
-  const deleteWorkout = async (id) => {
-    const prev = data.workouts;
-    setData(d => ({...d, workouts:d.workouts.filter(w=>w.id!==id)}));
-    try { await idbDelete(STORE_WORKOUTS, id); showStatus("ok"); }
-    catch (e) { showStatus("error"); setData(d => ({...d, workouts:prev})); }
-  };
-
-  // ── People / Exercises ──
-  const savePeople = async (list) => {
-    setData(d => ({...d, people:list}));
-    try { await idbPut(STORE_KV, list, "people"); } catch (e) { showStatus("error"); }
-  };
-  const saveExercises = async (list) => {
-    setData(d => ({...d, exercises:list}));
-    try { await idbPut(STORE_KV, list, "exercises"); } catch (e) { showStatus("error"); }
-  };
-
-  // ── Templates ──
-  const saveTemplates = async (list) => {
-    setData(d => ({...d, templates:list}));
-    try { await idbClear(STORE_TEMPLATES); await idbPutMany(STORE_TEMPLATES, list); }
-    catch (e) { showStatus("error"); }
-  };
-
-  // ── AI Workouts ──
-  const saveAiWorkout = async (entry) => {
-    setData(d => ({...d, aiWorkouts:[...d.aiWorkouts, entry]}));
-    try { await idbPut(STORE_AI_WORKOUTS, entry); }
-    catch (e) { showStatus("error"); setData(d => ({...d, aiWorkouts:d.aiWorkouts.filter(w=>w.id!==entry.id)})); }
-  };
-  const deleteAiWorkout = async (id) => {
-    const prev = data.aiWorkouts;
-    setData(d => ({...d, aiWorkouts:d.aiWorkouts.filter(w=>w.id!==id)}));
-    try { await idbDelete(STORE_AI_WORKOUTS, id); }
-    catch (e) { showStatus("error"); setData(d => ({...d, aiWorkouts:prev})); }
-  };
-
-  // ── Export / Import ──
-  const handleExport = () => {
-    const payload = {
-      app: "workout-tracker", version: 1, exportedAt: new Date().toISOString(),
-      workouts: data.workouts, people: data.people, exercises: data.exercises,
-      templates: data.templates, aiWorkouts: data.aiWorkouts,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `workouts-backup-${todayStr()}.json`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportFile = (file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result);
-        if (typeof parsed !== "object" || parsed === null) throw new Error("Not a valid backup file");
-        setImportPending(parsed);
-      } catch (e) {
-        alert("Could not read backup file: " + e.message);
-      }
-    };
-    reader.onerror = () => alert("Could not read file");
-    reader.readAsText(file);
-  };
-
-  const runImport = async (mode) => {
-    const p = importPending;
-    if (!p) return;
-    const wk  = Array.isArray(p.workouts) ? p.workouts : [];
-    const tpl = Array.isArray(p.templates) ? p.templates : [];
-    const ai  = Array.isArray(p.aiWorkouts) ? p.aiWorkouts : [];
-    const ppl = Array.isArray(p.people) ? p.people : [];
-    const exs = Array.isArray(p.exercises) ? p.exercises : [];
-    try {
-      if (mode === "replace") {
-        await idbClear(STORE_WORKOUTS); await idbClear(STORE_TEMPLATES); await idbClear(STORE_AI_WORKOUTS);
-        await idbPutMany(STORE_WORKOUTS, wk);
-        await idbPutMany(STORE_TEMPLATES, tpl);
-        await idbPutMany(STORE_AI_WORKOUTS, ai);
-        await idbPut(STORE_KV, ppl.length ? ppl : DEFAULT_PEOPLE, "people");
-        await idbPut(STORE_KV, exs.length ? exs : DEFAULT_EXERCISES, "exercises");
-      } else {
-        await idbPutMany(STORE_WORKOUTS, wk);
-        await idbPutMany(STORE_TEMPLATES, tpl);
-        await idbPutMany(STORE_AI_WORKOUTS, ai);
-        await idbPut(STORE_KV, dedupe([...data.people, ...ppl]), "people");
-        await idbPut(STORE_KV, dedupe([...data.exercises, ...exs]), "exercises");
-      }
-      setImportPending(null);
-      await load();
-      showStatus("ok");
-      alert(mode === "replace" ? "Data replaced from backup." : "Backup merged in.");
-    } catch (e) {
-      showStatus("error");
-      alert("Import failed: " + e.message);
-    }
-  };
-
-  const handleClearAll = async () => {
-    if (!confirm("Delete ALL workouts, templates, and AI workout history? This cannot be undone.")) return;
-    try {
-      await idbClear(STORE_WORKOUTS); await idbClear(STORE_TEMPLATES); await idbClear(STORE_AI_WORKOUTS);
-      await idbPut(STORE_KV, DEFAULT_PEOPLE, "people");
-      await idbPut(STORE_KV, DEFAULT_EXERCISES, "exercises");
-      await load();
-      showStatus("ok");
-    } catch (e) { showStatus("error"); }
-  };
-
-  const StatusBar = () => {
-    if (!status) return null;
-    const cfg = {saving:{color:"#fbbf24",text:"Saving…"},ok:{color:"#4ade80",text:"✓ Saved"},error:{color:"#f87171",text:"✗ Save failed"}};
-    const c = cfg[status];
-    return <div style={{position:"fixed",bottom:16,left:"50%",transform:"translateX(-50%)",
-      background:"#1e293b",border:`1px solid ${c.color}`,color:c.color,borderRadius:20,
-      padding:"8px 18px",fontSize:13,zIndex:200,boxShadow:"0 4px 12px rgba(0,0,0,.4)",whiteSpace:"nowrap"}}>{c.text}</div>;
-  };
-
-  return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <div style={S.headerTop}>
-          <span style={S.title}>💪 Workout Tracker</span>
-          <span style={{fontSize:11,color:"#475569"}}>offline · on-device</span>
-        </div>
-        <div style={S.tabs}>
-          {TABS.map((t,i)=><button key={t} style={S.tab(tab===i)} onClick={()=>setTab(i)}>{TAB_ICON[t]} {t}</button>)}
-        </div>
+/* ── Screens ────────────────────────────────────────────────────────────── */
+function Home({routines, go, begin}) {
+  if (!routines.length) {
+    return (
+      <div style={{padding: "28px 20px 0"}}>
+        <div style={{...kicker("var(--color-accent-700)"), marginBottom: 8}}>Up next today</div>
+        <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26, lineHeight: 1.1, letterSpacing: "-0.4px"}}>No workouts yet</div>
+        <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5, textWrap: "pretty"}}>Head to Coach to build your first routine.</div>
+        <button className="btn btn-primary" style={{marginTop: "var(--space-4)", minHeight: 52, fontSize: 17, width: "100%"}} onClick={() => go("coach")}>Go to Coach</button>
       </div>
-      <div style={S.body}>
-        {error && <div style={{background:"#450a0a",border:"1px solid #f87171",borderRadius:8,padding:"10px 12px",
-          marginBottom:12,fontSize:13,color:"#fca5a5"}}>{error}
-          <button onClick={load} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",marginLeft:8}}>Retry</button>
-        </div>}
-        {loading ? <Spinner/> : (<>
-          {tab===0 && <LogWorkout people={data.people} exercises={data.exercises} templates={data.templates} onSave={saveWorkout}/>}
-          {tab===1 && <History logs={data.workouts} onDelete={deleteWorkout}/>}
-          {tab===2 && <Progress logs={data.workouts} people={data.people} exercises={data.exercises}/>}
-          {tab===3 && <Records logs={data.workouts} people={data.people} exercises={data.exercises}/>}
-          {tab===4 && <Templates templates={data.templates} setTemplates={saveTemplates} exercises={data.exercises}/>}
-          {tab===5 && <AIWorkout apiKey={apiKey} setApiKey={setApiKey} aiWorkouts={data.aiWorkouts} onSaveWorkout={saveAiWorkout} onDeleteWorkout={deleteAiWorkout}/>}
-          {tab===6 && <Settings people={data.people} setPeople={savePeople} exercises={data.exercises} setExercises={saveExercises}
-            onExport={handleExport} onImportFile={handleImportFile} onClearAll={handleClearAll}/>}
-        </>)}
-      </div>
-      <StatusBar/>
-      {importPending && (
-        <Modal title="Import Backup" onClose={()=>setImportPending(null)}>
-          <p style={{color:"#94a3b8",fontSize:13,marginBottom:16,lineHeight:1.6}}>
-            This file has {(importPending.workouts||[]).length} workout(s), {(importPending.templates||[]).length} template(s) and {(importPending.aiWorkouts||[]).length} AI workout(s).
-            Merge it with your current data, or replace everything currently stored on this device?
-          </p>
-          <button style={{...S.btnPrimary,marginBottom:10}} onClick={()=>runImport("merge")}>🔀 Merge with existing data</button>
-          <button style={{...S.btnDanger,width:"100%",padding:"12px",marginBottom:10,border:"1px solid #f87171"}} onClick={()=>runImport("replace")}>♻️ Replace all data</button>
-          <button style={{...S.btnGhost,width:"100%"}} onClick={()=>setImportPending(null)}>Cancel</button>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── Log Workout ───────────────────────────────────────────────────────────────
-function LogWorkout({people, exercises, templates, onSave}) {
-  const [date, setDate]         = useState(todayStr());
-  const [activePeople, setActivePeople] = useState([people[0]||""]);
-  const [setsMap, setSetsMap]   = useState({[people[0]||""]: [emptySet(exercises)]});
-  const [activeTab, setActiveTab] = useState(people[0]||"");
-  const [saving, setSaving]     = useState(false);
-  const [done, setDone]         = useState(false);
-  const [tplModal, setTplModal] = useState(false);
-  const [addPersonModal, setAddPersonModal] = useState(false);
-
-  useEffect(()=>{
-    if(people.length && !activePeople.some(p=>people.includes(p))) {
-      setActivePeople([people[0]]); setSetsMap({[people[0]]:[emptySet(exercises)]}); setActiveTab(people[0]);
-    }
-  },[people]);
-
-  const addPersonToSession = (p) => {
-    if(activePeople.includes(p)) return;
-    const np = [...activePeople,p];
-    setActivePeople(np); setSetsMap(m=>({...m,[p]:[emptySet(exercises)]})); setActiveTab(p); setAddPersonModal(false);
-  };
-  const removePersonFromSession = (p) => {
-    if(activePeople.length===1) return;
-    const np = activePeople.filter(x=>x!==p);
-    setActivePeople(np); setSetsMap(m=>{const n={...m};delete n[p];return n;});
-    if(activeTab===p) setActiveTab(np[0]);
-  };
-  const addSet    = () => setSetsMap(m=>({...m,[activeTab]:[...m[activeTab],emptySet(exercises)]}));
-  const removeSet = (id) => setSetsMap(m=>({...m,[activeTab]:m[activeTab].filter(s=>s.id!==id)}));
-  const updSet    = (id,f,v) => setSetsMap(m=>({...m,[activeTab]:m[activeTab].map(s=>s.id===id?{...s,[f]:v}:s)}));
-  const loadTpl   = (t) => { setSetsMap(m=>({...m,[activeTab]:t.sets.map(s=>({...s,id:genId()}))})); setTplModal(false); };
-
-  const save = async () => {
-    if(!date||!activePeople.length) return;
-    setSaving(true);
-    await Promise.all(activePeople.map(p=>{
-      const sets=(setsMap[p]||[]).map(({id,...s})=>s).filter(s=>s.exercise);
-      if(!sets.length) return Promise.resolve();
-      return onSave({id:genId(),date,person:p,sets});
-    }));
-    setSaving(false); setDone(true);
-    setTimeout(()=>{
-      setDone(false);
-      const first=activePeople[0];
-      setActivePeople([first]); setSetsMap({[first]:[emptySet(exercises)]}); setActiveTab(first);
-    },1500);
-  };
-
-  const currentSets = setsMap[activeTab]||[];
-  const availableToAdd = people.filter(p=>!activePeople.includes(p));
-
+    );
+  }
+  const sorted = [...routines].sort((a, b) => b.last.localeCompare(a.last));
+  const suggestion = [...routines].sort((a, b) => a.last.localeCompare(b.last))[0];
+  const pastRows = sorted.filter(x => x.id !== suggestion.id);
   return (
     <div>
-      <div style={{marginBottom:12}}>
-        <Label>Date</Label>
-        <Inp type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:12}}>
-        {activePeople.map(p=>(
-          <div key={p} onClick={()=>setActiveTab(p)} style={{display:"flex",alignItems:"center",
-            background:activeTab===p?"#0ea5e9":"#1e293b",borderRadius:20,padding:"5px 10px 5px 12px",
-            cursor:"pointer",border:activeTab===p?"none":"1px solid #334155"}}>
-            <span style={{fontSize:13,fontWeight:activeTab===p?700:400,color:activeTab===p?"#fff":"#94a3b8",marginRight:4}}>{p}</span>
-            {activePeople.length>1&&<span onClick={e=>{e.stopPropagation();removePersonFromSession(p);}}
-              style={{color:activeTab===p?"rgba(255,255,255,0.7)":"#64748b",fontSize:16,lineHeight:1,cursor:"pointer"}}>×</span>}
-          </div>
-        ))}
-        {availableToAdd.length>0&&<button onClick={()=>setAddPersonModal(true)}
-          style={{...S.btnGhost,borderRadius:20,padding:"5px 12px",fontSize:13}}>+ Add Person</button>}
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <span style={{fontWeight:700,color:"#cbd5e1"}}>{activeTab}'s Sets</span>
-        <button style={S.btnGhost} onClick={()=>setTplModal(true)}>Load Template</button>
-      </div>
-      {currentSets.map((s,i)=>(
-        <div key={s.id} style={S.card}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            <span style={{fontSize:12,color:"#64748b"}}>Set {i+1}</span>
-            <button onClick={()=>removeSet(s.id)} style={{background:"none",border:"none",color:"#f87171",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-          </div>
-          <Sel value={s.exercise} onChange={e=>updSet(s.id,"exercise",e.target.value)} style={{marginBottom:8}}>
-            {exercises.map(ex=><option key={ex}>{ex}</option>)}
-          </Sel>
-          <div style={S.row}>
-            <div style={{flex:1}}><Label>Weight (lbs)</Label><Inp type="number" inputMode="decimal" value={s.weight} onChange={e=>updSet(s.id,"weight",e.target.value)} placeholder="0"/></div>
-            <div style={{flex:1}}><Label>Reps</Label><Inp type="number" inputMode="numeric" value={s.reps} onChange={e=>updSet(s.id,"reps",e.target.value)} placeholder="0"/></div>
-          </div>
+      <div style={{padding: "28px 20px 0"}}>
+        <div style={{...kicker("var(--color-accent-700)"), marginBottom: 8}}>Up next today</div>
+        <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 30, lineHeight: 1.1, letterSpacing: "-0.4px"}}>{suggestion.name}</div>
+        <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5, textWrap: "pretty"}}>{suggestion.note} · last done {agoText(suggestion.last)} · {totalSets(suggestion)} sets</div>
+        <div style={{fontSize: 15, marginTop: 12, lineHeight: 1.6, textWrap: "pretty"}}>{listNames(suggestion)}</div>
+        <div style={{display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)"}}>
+          <Btn style={{flex: 1, minHeight: 52, fontSize: 17}} onClick={() => begin(suggestion.id)}>Start workout</Btn>
+          <Btn variant="ghost" style={{minHeight: 52, padding: "0 18px", whiteSpace: "nowrap"}} onClick={() => go("preview", suggestion.id)}>See steps</Btn>
         </div>
-      ))}
-      <button style={{...S.btnGhost,width:"100%",padding:"10px",marginBottom:12}} onClick={addSet}>+ Add Set</button>
-      {activePeople.length>1&&(
-        <div style={{background:"#1e293b",borderRadius:8,padding:"10px 12px",marginBottom:12,display:"flex",gap:12,flexWrap:"wrap"}}>
-          {activePeople.map(p=>(
-            <span key={p} style={{fontSize:12,color:activeTab===p?"#38bdf8":"#94a3b8"}}>
-              <strong>{p}:</strong> {(setsMap[p]||[]).length} sets
-            </span>
+      </div>
+      {pastRows.length > 0 && (
+        <div style={{padding: "40px 20px 0"}}>
+          <div style={kicker("var(--color-neutral-700)")}>Do it again</div>
+          {pastRows.map(row => (
+            <div key={row.id} style={{padding: "20px 0 22px", borderBottom: "1px solid var(--color-divider)"}}>
+              <div style={{display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--space-2)"}}>
+                <div onClick={() => go("preview", row.id)} style={{cursor: "pointer", flex: 1}}>
+                  <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 21, lineHeight: 1.2}}>{row.name}</div>
+                  <div style={{fontSize: 13, color: "var(--color-neutral-700)", marginTop: 4}}>{agoText(row.last)} · {row.ex.length} exercises · {totalSets(row)} sets</div>
+                  <div style={{fontSize: 14, color: "var(--color-neutral-800)", marginTop: 8, lineHeight: 1.5, textWrap: "pretty"}}>{listNames(row)}</div>
+                </div>
+                <Btn style={{minHeight: 44, padding: "0 18px", whiteSpace: "nowrap"}} onClick={() => begin(row.id)}>Start</Btn>
+              </div>
+            </div>
           ))}
         </div>
       )}
-      <button style={{...S.btnPrimary,opacity:saving?0.7:1}} onClick={save} disabled={saving}>
-        {done?"✓ Saved!":saving?"Saving…":`Save ${activePeople.length>1?"All Workouts":"Workout"}`}
-      </button>
-      {tplModal&&<Modal title={`Load Template → ${activeTab}`} onClose={()=>setTplModal(false)}>
-        {templates.length===0&&<p style={{color:"#94a3b8"}}>No templates yet.</p>}
-        {templates.map(t=><button key={t.id} onClick={()=>loadTpl(t)} style={{display:"block",width:"100%",textAlign:"left",
-          background:"#334155",border:"none",color:"#e2e8f0",borderRadius:8,padding:"10px 12px",marginBottom:8,cursor:"pointer"}}>
-          <strong>{t.name}</strong><span style={{color:"#94a3b8",marginLeft:8,fontSize:13}}>{t.sets.length} sets</span>
-        </button>)}
-      </Modal>}
-      {addPersonModal&&<Modal title="Add Person to Session" onClose={()=>setAddPersonModal(false)}>
-        {availableToAdd.map(p=><button key={p} onClick={()=>addPersonToSession(p)} style={{display:"block",width:"100%",
-          textAlign:"left",background:"#334155",border:"none",color:"#e2e8f0",borderRadius:8,
-          padding:"10px 12px",marginBottom:8,cursor:"pointer",fontSize:14}}>{p}</button>)}
-      </Modal>}
     </div>
   );
 }
 
-// ── History ───────────────────────────────────────────────────────────────────
-function History({logs, onDelete}) {
-  const [expanded, setExpanded] = useState(null);
-  const sorted = [...logs].sort((a,b)=>b.date.localeCompare(a.date));
-  const del = async (id) => { if(confirm("Delete this workout?")) await onDelete(id); };
-  if(!logs.length) return <div style={S.empty}>No workouts logged yet.</div>;
+function Preview({routine, go, startActive}) {
+  if (!routine) return null;
   return (
-    <div>
-      {sorted.map(log=>(
-        <div key={log.id} style={{...S.card,padding:0,overflow:"hidden"}}>
-          <div onClick={()=>setExpanded(expanded===log.id?null:log.id)}
-            style={{padding:"12px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-            <div><span style={{fontWeight:700,color:"#38bdf8"}}>{log.date}</span><span style={{color:"#94a3b8",marginLeft:8}}>{log.person}</span></div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <span style={{color:"#64748b",fontSize:12}}>{log.sets.length} sets</span>
-              <span style={{color:"#64748b",fontSize:12}}>{expanded===log.id?"▲":"▼"}</span>
+    <div style={{padding: "28px 20px 0"}}>
+      <Btn variant="ghost" style={{padding: 0, minHeight: 32, border: "none", fontSize: 14}} onClick={() => go("home")}>&larr; Back</Btn>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 32, lineHeight: 1.1, marginTop: 14, letterSpacing: "-0.4px"}}>{routine.name}</div>
+      <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8}}>{routine.note} · {routine.ex.length} exercises · {totalSets(routine)} sets</div>
+      <div style={{marginTop: "var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-4)"}}>
+        {routine.ex.map((e, i) => (
+          <div key={i} style={{display: "flex", gap: "var(--space-3)", alignItems: "baseline"}}>
+            <div style={{fontFamily: "var(--font-heading)", fontSize: 15, color: "var(--color-accent-700)", width: 26, flex: "none"}}>{String(i + 1).padStart(2, "0")}</div>
+            <div style={{flex: 1}}>
+              <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, lineHeight: 1.25}}>{e.name}</div>
+              <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 3}}>{e.sets} sets · {target(e)}</div>
+              <div style={{fontSize: 14, color: "var(--color-neutral-700)", marginTop: 5, fontStyle: "italic", lineHeight: 1.5, textWrap: "pretty"}}>{e.cue}</div>
             </div>
           </div>
-          {expanded===log.id&&(
-            <div style={{padding:"0 12px 12px"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{color:"#64748b"}}>
-                  <th style={{textAlign:"left",paddingBottom:6}}>Exercise</th>
-                  <th style={{textAlign:"right"}}>Weight</th>
-                  <th style={{textAlign:"right"}}>Reps</th>
-                </tr></thead>
-                <tbody>{log.sets.map((s,i)=>(
-                  <tr key={i} style={{borderTop:"1px solid #334155"}}>
-                    <td style={{padding:"5px 0"}}>{s.exercise}</td>
-                    <td style={{textAlign:"right"}}>{s.weight} lbs</td>
-                    <td style={{textAlign:"right"}}>{s.reps}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              <button style={{...S.btnDanger,marginTop:10}} onClick={()=>del(log.id)}>Delete</button>
+        ))}
+      </div>
+      <Btn style={{width: "100%", minHeight: 54, fontSize: 17, margin: "var(--space-6) 0 var(--space-4)"}} onClick={startActive}>Start workout</Btn>
+    </div>
+  );
+}
+
+function Run(props) {
+  const {routine, exIndex, done, logged, run, prefs, quitRun, sessionClock, sessionPaused, sessionToggle,
+    weightUp, weightDown, repsUp, repsDown, primaryAction, skipAction, tick,
+    restShown, restOn, restLeft, restAction, restSkip} = props;
+  if (!routine) return null;
+  const ex = routine.ex[exIndex];
+  const doneCount = done[exIndex] || 0;
+  const doneTotal = done.reduce((a, b) => a + b, 0);
+  const pct = Math.round(doneTotal / totalSets(routine) * 100) + "%";
+  const hasWeight = !!(ex && ex.weight);
+  const primaryLabel = (doneCount + 1 >= ex.sets)
+    ? (exIndex + 1 >= routine.ex.length ? "Finish workout" : "Done — next exercise")
+    : `Set ${doneCount + 1} done`;
+  const upNext = exIndex + 1 < routine.ex.length ? `Up next: ${routine.ex[exIndex + 1].name}` : "Last exercise of the session.";
+  const setLabel = `Set ${Math.min(doneCount + 1, ex.sets)} of ${ex.sets}`;
+  const mm = Math.floor(restLeft / 60), ss = String(restLeft % 60).padStart(2, "0");
+
+  return (
+    <div style={{padding: "22px 20px 0"}}>
+      <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--color-neutral-700)"}}>
+        <span>{routine.name}</span>
+        <button onClick={quitRun} style={{background: "none", border: "none", color: "var(--color-neutral-700)", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", cursor: "pointer", padding: 4}}>End</button>
+      </div>
+      <div style={{display: "flex", alignItems: "baseline", gap: "var(--space-3)", marginTop: 8}}>
+        <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26, lineHeight: 1, flex: 1}}>{sessionClock}</div>
+        <Btn variant="ghost" style={{minHeight: 36, padding: "0 12px", fontSize: 13, whiteSpace: "nowrap"}} onClick={sessionToggle}>{sessionPaused ? "Resume" : "Pause"}</Btn>
+      </div>
+      <div style={{height: 3, background: "var(--color-neutral-300)", marginTop: 10}}>
+        <div style={{height: 3, background: "var(--color-accent)", width: pct}}/>
+      </div>
+
+      <div style={{marginTop: "var(--space-6)"}}>
+        <div style={{fontSize: 13, color: "var(--color-neutral-700)", letterSpacing: "0.06em"}}>Exercise {exIndex + 1} of {routine.ex.length}</div>
+        <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.8px", marginTop: 8}}>{ex.name}</div>
+        <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 10, fontStyle: "italic", lineHeight: 1.5, textWrap: "pretty"}}>{ex.cue}</div>
+      </div>
+
+      <div style={{marginTop: "var(--space-6)", paddingTop: "var(--space-4)", borderTop: "1px solid var(--color-divider)"}}>
+        <div style={kicker("var(--color-accent-700)")}>{setLabel}</div>
+        <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 40, lineHeight: 1, letterSpacing: "-1px", marginTop: 10}}>{target(ex)}</div>
+        <div style={{display: "flex", flexWrap: "wrap", gap: "var(--space-4) var(--space-6)", marginTop: "var(--space-4)"}}>
+          {hasWeight && (
+            <div>
+              <div style={kicker("var(--color-neutral-700)")}>Adjust weight</div>
+              <div style={{display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 8}}>
+                <Btn variant="secondary" aria-label="Lower weight" style={{minHeight: 46, width: 46, padding: 0, fontSize: 20}} onClick={weightDown}>&minus;</Btn>
+                <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center"}}>{ex.weight} lb</div>
+                <Btn variant="secondary" aria-label="Raise weight" style={{minHeight: 46, width: 46, padding: 0, fontSize: 20}} onClick={weightUp}>+</Btn>
+              </div>
             </div>
           )}
+          <div>
+            <div style={kicker("var(--color-neutral-700)")}>Adjust reps</div>
+            <div style={{display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 8}}>
+              <Btn variant="secondary" aria-label="Lower reps" style={{minHeight: 46, width: 46, padding: 0, fontSize: 20}} onClick={repsDown}>&minus;</Btn>
+              <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center"}}>{ex.reps} reps</div>
+              <Btn variant="secondary" aria-label="Raise reps" style={{minHeight: 46, width: 46, padding: 0, fontSize: 20}} onClick={repsUp}>+</Btn>
+            </div>
+          </div>
         </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Progress ──────────────────────────────────────────────────────────────────
-function Progress({logs, people, exercises}) {
-  const [person, setPerson]     = useState(people[0]||"");
-  const [exercise, setExercise] = useState(exercises[0]||"");
-  const data = logs.filter(l=>l.person===person)
-    .flatMap(l=>l.sets.filter(s=>s.exercise===exercise).map(s=>({date:l.date,weight:+s.weight,reps:+s.reps})))
-    .sort((a,b)=>a.date.localeCompare(b.date));
-  const maxW=data.length?Math.max(...data.map(d=>d.weight)):0;
-  const W=Math.max(data.length*50,200),H=120;
-  return (
-    <div>
-      <div style={{...S.row,marginBottom:16}}>
-        <Sel style={{flex:1}} value={person} onChange={e=>setPerson(e.target.value)}>{people.map(p=><option key={p}>{p}</option>)}</Sel>
-        <Sel style={{flex:1}} value={exercise} onChange={e=>setExercise(e.target.value)}>{exercises.map(ex=><option key={ex}>{ex}</option>)}</Sel>
       </div>
-      {!data.length?<div style={S.empty}>No data for this selection.</div>:(<>
-        <div style={{...S.card,overflowX:"auto"}}>
-          <div style={{fontSize:12,color:"#64748b",marginBottom:8}}>Weight over time (lbs)</div>
-          <svg viewBox={`0 0 ${W} ${H+24}`} style={{width:"100%",minWidth:200}}>
-            {data.map((d,i)=>{
-              const x=i*50+25,y=maxW?H-(d.weight/maxW)*(H-14)+6:H/2;
-              return(<g key={i}>
-                {i>0&&(()=>{const px=(i-1)*50+25,py=maxW?H-(data[i-1].weight/maxW)*(H-14)+6:H/2;
-                  return<line x1={px} y1={py} x2={x} y2={y} stroke="#0ea5e9" strokeWidth="2"/>;})()}
-                <circle cx={x} cy={y} r={5} fill="#0ea5e9"/>
-                <text x={x} y={y-9} textAnchor="middle" fill="#e2e8f0" fontSize="11">{d.weight}</text>
-                <text x={x} y={H+18} textAnchor="middle" fill="#64748b" fontSize="9">{d.date.slice(5)}</text>
-              </g>);
-            })}
-          </svg>
-        </div>
-        <div style={S.card}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{color:"#64748b"}}>
-              <th style={{textAlign:"left",paddingBottom:6}}>Date</th><th style={{textAlign:"right"}}>Weight</th>
-              <th style={{textAlign:"right"}}>Reps</th><th style={{textAlign:"right"}}>Δ</th>
-            </tr></thead>
-            <tbody>{data.map((d,i)=>{const diff=i>0?d.weight-data[i-1].weight:null;return(
-              <tr key={i} style={{borderTop:"1px solid #334155"}}>
-                <td style={{padding:"5px 0"}}>{d.date}</td><td style={{textAlign:"right"}}>{d.weight} lbs</td>
-                <td style={{textAlign:"right"}}>{d.reps}</td>
-                <td style={{textAlign:"right",color:diff>0?"#4ade80":diff<0?"#f87171":"#94a3b8"}}>{diff===null?"—":diff>0?`+${diff}`:diff}</td>
-              </tr>);})}</tbody>
-          </table>
-        </div>
-      </>)}
-    </div>
-  );
-}
 
-// ── Records ───────────────────────────────────────────────────────────────────
-function Records({logs, people, exercises}) {
-  const [person, setPerson] = useState(people[0]||"");
-  const recs={};
-  exercises.forEach(ex=>{recs[ex]={weight:0,reps:0,date:""};});
-  logs.filter(l=>l.person===person).forEach(l=>{
-    l.sets.forEach(s=>{
-      if(!recs[s.exercise]) recs[s.exercise]={weight:0,reps:0,date:""};
-      if(+s.weight>recs[s.exercise].weight) recs[s.exercise]={weight:+s.weight,reps:+s.reps,date:l.date};
-    });
-  });
-  const hasData=Object.values(recs).some(r=>r.weight>0);
-  return (
-    <div>
-      <Sel style={{marginBottom:12}} value={person} onChange={e=>setPerson(e.target.value)}>{people.map(p=><option key={p}>{p}</option>)}</Sel>
-      {!hasData?<div style={S.empty}>No records for {person} yet.</div>:(
-        <div style={{background:"#1e293b",borderRadius:8,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{background:"#334155",color:"#94a3b8"}}>
-              <th style={{padding:"9px 12px",textAlign:"left"}}>Exercise</th>
-              <th style={{textAlign:"right",padding:"9px 8px"}}>Max</th>
-              <th style={{textAlign:"right",padding:"9px 12px"}}>Reps</th>
-            </tr></thead>
-            <tbody>{Object.entries(recs).filter(([,v])=>v.weight>0).map(([ex,v])=>(
-              <tr key={ex} style={{borderTop:"1px solid #334155"}}>
-                <td style={{padding:"8px 12px"}}><div>{ex}</div><div style={{fontSize:11,color:"#64748b"}}>{v.date}</div></td>
-                <td style={{textAlign:"right",padding:"8px",color:"#fbbf24",fontWeight:700}}>{v.weight} lbs</td>
-                <td style={{textAlign:"right",padding:"8px 12px"}}>{v.reps}</td>
-              </tr>
-            ))}</tbody>
-          </table>
+      <div style={{display: "flex", gap: "var(--space-2)", marginTop: "var(--space-6)"}}>
+        <Btn style={{flex: 1, minHeight: 56, fontSize: 17}} onClick={primaryAction}>{primaryLabel}</Btn>
+        <Btn variant="ghost" style={{minHeight: 56, padding: "0 18px"}} onClick={skipAction}>Skip</Btn>
+      </div>
+      <div style={{fontSize: 13, color: "var(--color-neutral-700)", marginTop: "var(--space-3)", lineHeight: 1.5}}>{upNext}</div>
+
+      {prefs.view === "exercise" && (
+        <div style={{marginTop: "var(--space-6)"}}>
+          {Array.from({length: ex.sets}, (_, i) => {
+            const isDone = i < doneCount;
+            const t = isDone ? targetAt(ex, logged[exIndex + ":" + i] ?? ex.weight) : target(ex);
+            return (
+              <div key={i} style={{display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "12px 2px", borderBottom: "1px solid var(--color-divider)", minHeight: 44}}>
+                <div style={{flex: 1, fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--color-neutral-700)"}}>SET {i + 1}</div>
+                <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18}}>{t}</div>
+                {isDone ? (
+                  <Btn variant="ghost" style={{minHeight: 40, padding: "0 12px", whiteSpace: "nowrap", color: "var(--color-accent-700)"}} onClick={() => tick(i)}>&#10003; Done</Btn>
+                ) : (
+                  <Btn variant="secondary" style={{minHeight: 40, padding: "0 14px", whiteSpace: "nowrap"}} onClick={() => tick(i)}>Mark done</Btn>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {restShown && (
+        <div className="dialog-backdrop">
+          <div className="dialog" style={{maxWidth: 340}}>
+            <div className="dialog-title">Set logged — rest?</div>
+            <div className="dialog-body">
+              <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 52, lineHeight: 1, letterSpacing: "-1px"}}>{mm}:{ss}</div>
+              <div style={{fontSize: 14, color: "var(--color-neutral-700)", marginTop: 10, lineHeight: 1.5, textWrap: "pretty"}}>
+                {restOn ? "Running — this closes itself when it hits zero." : "Start the clock, or skip straight to the next set."}
+              </div>
+            </div>
+            <div className="dialog-actions">
+              <Btn variant="ghost" style={{minHeight: 44, whiteSpace: "nowrap"}} onClick={restSkip}>Skip rest</Btn>
+              <Btn style={{minHeight: 44, whiteSpace: "nowrap"}} onClick={restAction}>{restOn ? "Pause" : "Start timer"}</Btn>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ── Templates ─────────────────────────────────────────────────────────────────
-function Templates({templates, setTemplates, exercises}) {
-  const [show,setShow]=useState(false);const [editing,setEditing]=useState(null);
-  const [name,setName]=useState("");const [sets,setSets]=useState([emptySet(exercises)]);
-  const startNew=()=>{setName("");setSets([emptySet(exercises)]);setEditing(null);setShow(true);};
-  const startEdit=(t)=>{setName(t.name);setSets(t.sets.map(s=>({...s,id:genId()})));setEditing(t.id);setShow(true);};
-  const addSet=()=>setSets(s=>[...s,emptySet(exercises)]);
-  const removeSet=(id)=>setSets(s=>s.filter(x=>x.id!==id));
-  const updSet=(id,f,v)=>setSets(s=>s.map(x=>x.id===id?{...x,[f]:v}:x));
-  const save=()=>{if(!name.trim())return;const entry={id:editing||genId(),name,sets:sets.map(({id,...s})=>s)};setTemplates(editing?templates.map(t=>t.id===editing?entry:t):[...templates,entry]);setShow(false);};
-  const del=(id)=>{if(confirm("Delete template?"))setTemplates(templates.filter(t=>t.id!==id));};
-  if(show) return(
-    <div>
-      <button style={S.btnGhost} onClick={()=>setShow(false)}>← Back</button>
-      <h3 style={{margin:"14px 0 10px",color:"#cbd5e1"}}>{editing?"Edit":"New"} Template</h3>
-      <Inp value={name} onChange={e=>setName(e.target.value)} placeholder="Template name" style={{marginBottom:12}}/>
-      {sets.map((s,i)=>(
-        <div key={s.id} style={S.card}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            <span style={{fontSize:12,color:"#64748b"}}>Set {i+1}</span>
-            <button onClick={()=>removeSet(s.id)} style={{background:"none",border:"none",color:"#f87171",fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-          </div>
-          <Sel value={s.exercise} onChange={e=>updSet(s.id,"exercise",e.target.value)} style={{marginBottom:8}}>{exercises.map(ex=><option key={ex}>{ex}</option>)}</Sel>
-          <div style={S.row}>
-            <div style={{flex:1}}><Label>Weight</Label><Inp type="number" inputMode="decimal" value={s.weight} onChange={e=>updSet(s.id,"weight",e.target.value)} placeholder="0"/></div>
-            <div style={{flex:1}}><Label>Reps</Label><Inp type="number" inputMode="numeric" value={s.reps} onChange={e=>updSet(s.id,"reps",e.target.value)} placeholder="0"/></div>
-          </div>
-        </div>
-      ))}
-      <button style={{...S.btnGhost,width:"100%",padding:"10px",marginBottom:12}} onClick={addSet}>+ Add Set</button>
-      <button style={S.btnPrimary} onClick={save}>Save Template</button>
+function Done({routine, doneSummary, goHome}) {
+  return (
+    <div style={{padding: "60px 20px 0"}}>
+      <div style={kicker("var(--color-accent-2-700)")}>Filed</div>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 40, lineHeight: 1.05, marginTop: 10, letterSpacing: "-0.8px"}}>{routine ? routine.name + " done" : "Workout done"}</div>
+      <div style={{fontSize: 17, color: "var(--color-neutral-800)", marginTop: "var(--space-3)", lineHeight: 1.6}}>{doneSummary} · filed to your history</div>
+      <Btn style={{width: "100%", minHeight: 54, fontSize: 17, marginTop: "var(--space-6)"}} onClick={goHome}>Back to today</Btn>
     </div>
   );
-  return(
-    <div>
-      <button style={{...S.btnPrimary,marginBottom:16}} onClick={startNew}>+ New Template</button>
-      {templates.length===0&&<div style={S.empty}>No templates yet.</div>}
-      {templates.map(t=>(
-        <div key={t.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:700}}>{t.name}</div><div style={{fontSize:12,color:"#94a3b8"}}>{t.sets.length} sets · {[...new Set(t.sets.map(s=>s.exercise))].slice(0,3).join(", ")}</div></div>
-          <div style={{display:"flex",gap:8}}>
-            <button style={S.btnGhost} onClick={()=>startEdit(t)}>Edit</button>
-            <button style={S.btnDanger} onClick={()=>del(t.id)}>Del</button>
+}
+
+function History({history, openId, setOpenId}) {
+  return (
+    <div style={{padding: "28px 20px 0"}}>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px"}}>History</div>
+      {history.length === 0 && <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: "var(--space-4)"}}>No sessions logged yet.</div>}
+      {history.map(h => {
+        const open = openId === h.id;
+        return (
+          <div key={h.id} style={{padding: "4px 0", borderBottom: "1px solid var(--color-divider)"}}>
+            <div onClick={() => setOpenId(open ? null : h.id)} style={{display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--space-2)", padding: "14px 0", cursor: "pointer", minHeight: 44}}>
+              <div>
+                <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18}}>{h.name}</div>
+                <div style={{fontSize: 13, color: "var(--color-neutral-700)", marginTop: 3}}>{h.sets} sets · {h.mins} min</div>
+              </div>
+              <div style={{display: "flex", alignItems: "baseline", gap: "var(--space-2)", flex: "none"}}>
+                <div style={{fontSize: 13, color: "var(--color-neutral-700)", whiteSpace: "nowrap"}}>{fmtDate(h.date)}</div>
+                <div style={{fontSize: 12, color: "var(--color-accent-700)", whiteSpace: "nowrap"}}>{open ? "Hide" : "Details"}</div>
+              </div>
+            </div>
+            {open && (
+              <div style={{padding: "0 0 var(--space-4)", display: "flex", flexDirection: "column", gap: 8}}>
+                {(h.detail || []).map((d, i) => (
+                  <div key={i} style={{display: "flex", justifyContent: "space-between", gap: "var(--space-3)", fontSize: 15}}>
+                    <div style={{color: "var(--color-neutral-800)"}}>{d.name}</div>
+                    <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, whiteSpace: "nowrap"}}>{d.target}</div>
+                  </div>
+                ))}
+                <div style={{fontSize: 13, color: "var(--color-neutral-700)", fontStyle: "italic"}}>
+                  {h.detail ? "Logged as you trained." : "Older session — exercise detail wasn't recorded."}
+                </div>
+              </div>
+            )}
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Progress({routines, history}) {
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const end = Date.now() - i * 7 * 86400000, start = end - 7 * 86400000;
+    const n = history.filter(h => { const t = new Date(h.date + "T12:00:00").getTime(); return t > start && t <= end; }).length;
+    weeks.push({label: i === 0 ? "now" : i + "w", count: n, h: (n / 4 * 100) + "%"});
+  }
+  const bests = {};
+  routines.forEach(x => x.ex.forEach(e => { if (!(e.name in bests) || e.weight > bests[e.name]) bests[e.name] = e.weight; }));
+  const bestRows = Object.keys(bests).slice(0, 8).map(k => ({name: k, best: bests[k] ? bests[k] + " lb" : "bodyweight"}));
+
+  return (
+    <div style={{padding: "28px 20px 0"}}>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px"}}>Progress</div>
+      <div style={{...kicker("var(--color-neutral-700)"), marginTop: "var(--space-4)"}}>Sessions, last eight weeks</div>
+      <div style={{display: "flex", alignItems: "flex-end", gap: "var(--space-2)", height: 130, marginTop: "var(--space-3)", borderBottom: "1px solid var(--color-text)"}}>
+        {weeks.map((w, i) => (
+          <div key={i} style={{flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", height: "100%"}}>
+            <div className="tabular" style={{fontSize: 12, color: "var(--color-neutral-700)", marginBottom: 4}}>{w.count}</div>
+            <div style={{width: "100%", background: "var(--color-accent)", height: w.h}}/>
+          </div>
+        ))}
+      </div>
+      <div style={{display: "flex", gap: "var(--space-2)", marginTop: 6}}>
+        {weeks.map((w, i) => <div key={i} style={{flex: 1, textAlign: "center", fontSize: 10, color: "var(--color-neutral-700)"}}>{w.label}</div>)}
+      </div>
+      <div style={{...kicker("var(--color-neutral-700)"), marginTop: "var(--space-8)"}}>Heaviest set on record</div>
+      {bestRows.length === 0 && <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: "var(--space-3)"}}>No exercises recorded yet.</div>}
+      {bestRows.map(b => (
+        <div key={b.name} style={{display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "13px 0", borderBottom: "1px solid var(--color-divider)"}}>
+          <div style={{fontSize: 17}}>{b.name}</div>
+          <div className="tabular" style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 17}}>{b.best}</div>
         </div>
       ))}
     </div>
   );
 }
 
-// ── AI Workout Generator ──────────────────────────────────────────────────────
-function AIWorkout({apiKey, setApiKey, aiWorkouts, onSaveWorkout, onDeleteWorkout}) {
-  const [view, setView] = useState("generate"); // generate | history
-  const [showApiSetup, setShowApiSetup] = useState(!apiKey);
-  const [tempApiKey, setTempApiKey] = useState("");
-  const [step, setStep] = useState("form"); // form, loading, result
-  const [workout, setWorkout] = useState(null);
-  const [viewingId, setViewingId] = useState(null);
-  const [error, setError] = useState("");
-  const [preferences, setPreferences] = useState({
-    fitnessLevel: "Intermediate",
-    timeAvailable: "30",
-    goal: "Strength",
-    equipment: "Dumbbells",
-    focusArea: "Full body",
-    notes: "",
-  });
+function Coach({apiKey, saveApiKey, coach, setCoach, coachBusy, coachNote, generate}) {
+  const [tempKey, setTempKey] = useState("");
+  const [editingKey, setEditingKey] = useState(!apiKey);
 
-  const handleSaveApiKey = () => {
-    if (!tempApiKey.trim()) return;
-    sessionStorage.setItem("claudeApiKey", tempApiKey);
-    setApiKey(tempApiKey);
-    setShowApiSetup(false);
+  if (editingKey) {
+    return (
+      <div style={{padding: "28px 20px 0"}}>
+        <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px"}}>Ask for a workout</div>
+        <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5, textWrap: "pretty"}}>Enter a Claude API key to let Coach build routines for you. Get one at console.anthropic.com.</div>
+        <div className="field" style={{marginTop: "var(--space-6)"}}>
+          <label>Claude API key</label>
+          <input className="input" type="password" placeholder="sk-ant-..." value={tempKey} onChange={e => setTempKey(e.target.value)}/>
+        </div>
+        <Btn style={{width: "100%", minHeight: 44, marginTop: "var(--space-3)"}} disabled={!tempKey.trim()} onClick={() => { saveApiKey(tempKey); setEditingKey(false); }}>Save key</Btn>
+        {apiKey && <Btn variant="ghost" style={{width: "100%", minHeight: 40, marginTop: "var(--space-2)"}} onClick={() => setEditingKey(false)}>Cancel</Btn>}
+        <div style={{fontSize: 13, color: "var(--color-neutral-700)", marginTop: "var(--space-3)", lineHeight: 1.5}}>Stored only in this browser tab's session — never saved to IndexedDB.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding: "28px 20px 0"}}>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px"}}>Ask for a workout</div>
+      <div style={{fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5, textWrap: "pretty"}}>Three choices and you get a routine you can start straight away.</div>
+      <div style={{marginTop: "var(--space-6)", display: "flex", flexDirection: "column", gap: "var(--space-4)"}}>
+        <div className="field">
+          <label>Time available</label>
+          <select className="input" value={coach.minutes} onChange={e => setCoach({...coach, minutes: e.target.value})}>
+            <option>20</option><option>30</option><option>45</option><option>60</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Focus</label>
+          <select className="input" value={coach.focus} onChange={e => setCoach({...coach, focus: e.target.value})}>
+            <option>Full body</option><option>Upper body</option><option>Lower body</option><option>Core</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Equipment</label>
+          <select className="input" value={coach.equipment} onChange={e => setCoach({...coach, equipment: e.target.value})}>
+            <option>Bodyweight only</option><option>Dumbbells</option><option>Barbell</option><option>Full gym</option>
+          </select>
+        </div>
+      </div>
+      <Btn style={{width: "100%", minHeight: 52, fontSize: 17, marginTop: "var(--space-6)"}} disabled={coachBusy} onClick={generate}>{coachBusy ? "Building…" : "Build the workout"}</Btn>
+      <Btn variant="ghost" style={{width: "100%", minHeight: 36, marginTop: "var(--space-2)"}} onClick={() => setEditingKey(true)}>Update API key</Btn>
+      <div style={{fontSize: 14, color: "var(--color-neutral-700)", marginTop: "var(--space-3)", lineHeight: 1.5}}>{coachNote || "It lands at the top of your workouts, ready to start."}</div>
+    </div>
+  );
+}
+
+function Settings({prefs, setPrefs, routines, removeRoutine, resetData}) {
+  return (
+    <div style={{padding: "28px 20px 0"}}>
+      <div style={{fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px"}}>Settings</div>
+
+      <div style={{marginTop: "var(--space-6)"}}>
+        <div style={kicker("var(--color-neutral-700)")}>Workout view</div>
+        <div style={{fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5, textWrap: "pretty"}}>How much the app shows you at once while you train.</div>
+        <Seg name="wview" value={prefs.view} onChange={v => setPrefs({...prefs, view: v})} options={[{value: "set", label: "Single set"}, {value: "exercise", label: "Single exercise"}]}/>
+      </div>
+
+      <div style={{marginTop: "var(--space-6)"}}>
+        <div style={kicker("var(--color-neutral-700)")}>Rest between sets</div>
+        <div style={{fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5, textWrap: "pretty"}}>Auto starts the clock the moment you tick a set off.</div>
+        <Seg name="wrest" value={prefs.rest} onChange={v => setPrefs({...prefs, rest: v})} options={[{value: "auto", label: "Auto"}, {value: "manual", label: "Manual timer"}]}/>
+        <div className="field" style={{marginTop: "var(--space-4)"}}>
+          <label>Rest length (seconds)</label>
+          <input className="input" type="number" inputMode="numeric" value={prefs.secs} onChange={e => { const v = parseInt(e.target.value, 10); setPrefs({...prefs, secs: isNaN(v) ? 90 : v}); }}/>
+        </div>
+      </div>
+
+      <div style={{marginTop: "var(--space-8)"}}>
+        <div style={kicker("var(--color-neutral-700)")}>Your workouts</div>
+        {routines.map(r => (
+          <div key={r.id} style={{display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "14px 0", borderBottom: "1px solid var(--color-divider)"}}>
+            <div>
+              <div style={{fontSize: 17}}>{r.name}</div>
+              <div style={{fontSize: 13, color: "var(--color-neutral-700)", marginTop: 2}}>{r.ex.length} exercises · last done {agoText(r.last)}</div>
+            </div>
+            <Btn variant="ghost" style={{minHeight: 40, padding: "0 14px"}} onClick={() => removeRoutine(r.id)}>Remove</Btn>
+          </div>
+        ))}
+      </div>
+
+      <Btn variant="ghost" style={{width: "100%", minHeight: 48, marginTop: "var(--space-6)"}} onClick={resetData}>Reset to sample data</Btn>
+    </div>
+  );
+}
+
+/* ── App ────────────────────────────────────────────────────────────────── */
+function App() {
+  const [loading, setLoading] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [routines, setRoutines] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [prefs, setPrefs] = useState(DEFAULT_PREFS);
+
+  const [screen, setScreen] = useState("home");
+  const [activeId, setActiveId] = useState(null);
+  const [exIndex, setExIndex] = useState(0);
+  const [done, setDone] = useState([]);
+  const [logged, setLogged] = useState({});
+  const [startedAt, setStartedAt] = useState(null);
+  const [paused, setPaused] = useState(false);
+  const [pausedMs, setPausedMs] = useState(0);
+  const [restShown, setRestShown] = useState(false);
+  const [restOn, setRestOn] = useState(false);
+  const [restLeft, setRestLeft] = useState(0);
+  const [doneSummary, setDoneSummary] = useState("");
+  const [openHistory, setOpenHistory] = useState(null);
+  const [clockTick, setClockTick] = useState(0);
+
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem("claudeApiKey") || "");
+  const [coach, setCoach] = useState({minutes: "30", focus: "Full body", equipment: "Dumbbells"});
+  const [coachBusy, setCoachBusy] = useState(false);
+  const [coachNote, setCoachNote] = useState("");
+
+  useEffect(() => {
+    loadAppState().then(s => { setRoutines(s.routines); setHistory(s.history); setPrefs(s.prefs); setLoading(false); setLoadedOnce(true); });
+  }, []);
+
+  useEffect(() => { if (loadedOnce) idbReplaceAll("routines", routines).catch(() => {}); }, [routines, loadedOnce]);
+  useEffect(() => { if (loadedOnce) idbReplaceAll("history", history).catch(() => {}); }, [history, loadedOnce]);
+  useEffect(() => { if (loadedOnce) idbPut("prefs", prefs, "prefs").catch(() => {}); }, [prefs, loadedOnce]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setClockTick(c => c + 1);
+      setRestOn(on => {
+        if (!on) return on;
+        setRestLeft(left => {
+          if (left <= 1) { setRestOn(false); setRestShown(false); return 0; }
+          return left - 1;
+        });
+        return on;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const routine = id => routines.find(r => r.id === id);
+  const activeRoutine = activeId ? routine(activeId) : null;
+
+  const go = (k, id) => { setScreen(k); if (id !== undefined) setActiveId(id); };
+
+  const begin = (id) => {
+    const r = routine(id);
+    setScreen("run"); setActiveId(id); setExIndex(0); setDone(r.ex.map(() => 0));
+    setStartedAt(Date.now()); setPaused(false); setPausedMs(0);
+    setRestShown(false); setRestOn(false); setRestLeft(0); setLogged({});
   };
 
-  const handleGenerate = async () => {
-    if (!apiKey) { setShowApiSetup(true); return; }
+  const startRest = () => { setRestShown(true); setRestLeft(prefs.secs); setRestOn(prefs.rest === "auto"); };
+
+  const tick = (i) => {
+    const r = activeRoutine, ex = r.ex[exIndex];
+    const next = done[exIndex] === i + 1 ? i : i + 1;
+    setDone(d => { const nd = d.slice(); nd[exIndex] = next; return nd; });
+    setLogged(lg => {
+      const nlg = {...lg};
+      if (next > i) nlg[exIndex + ":" + i] = ex.weight; else delete nlg[exIndex + ":" + i];
+      return nlg;
+    });
+    if (next > i && next < ex.sets) startRest();
+    else if (next >= ex.sets) { setRestShown(false); setRestOn(false); }
+  };
+
+  const advance = () => {
+    const r = activeRoutine;
+    if (exIndex + 1 >= r.ex.length) { finish(); return; }
+    setDone(d => { const nd = d.slice(); nd[exIndex] = r.ex[exIndex].sets; return nd; });
+    setExIndex(i => i + 1); setRestShown(false); setRestOn(false); setRestLeft(0);
+  };
+
+  const completeSet = () => {
+    const r = activeRoutine, ex = r.ex[exIndex];
+    const doneNow = (done[exIndex] || 0) + 1;
+    if (doneNow >= ex.sets) { advance(); return; }
+    setDone(d => { const nd = d.slice(); nd[exIndex] = doneNow; return nd; });
+    setLogged(lg => ({...lg, [exIndex + ":" + (doneNow - 1)]: ex.weight}));
+    startRest();
+  };
+
+  const bumpWeight = (delta) => {
+    setRoutines(rs => rs.map(x => x.id !== activeId ? x : {...x, ex: x.ex.map((e, j) => j !== exIndex ? e : {...e, weight: Math.max(0, e.weight + delta)})}));
+  };
+  const bumpReps = (delta) => {
+    setRoutines(rs => rs.map(x => x.id !== activeId ? x : {...x, ex: x.ex.map((e, j) => j !== exIndex ? e : {...e, reps: Math.max(1, e.reps + delta)})}));
+  };
+
+  const finish = () => {
+    const r = activeRoutine;
+    const mins = Math.max(1, Math.round((Date.now() - (startedAt || Date.now())) / 60000));
+    const iso = new Date().toISOString().slice(0, 10);
+    const setsDone = done.reduce((a, b) => a + b, 0) + (r.ex[exIndex].sets - (done[exIndex] || 0));
+    const detail = r.ex.map(e => ({name: e.name, target: e.sets + " × " + target(e)}));
+    setHistory(h => sortHistory([{id: "h" + Date.now(), date: iso, name: r.name, sets: setsDone, mins, detail, ts: Date.now()}, ...h]));
+    setRoutines(rs => rs.map(x => x.id === r.id ? {...x, last: iso} : x));
+    setDoneSummary(setsDone + " sets · " + mins + " min");
+    setRestOn(false); setRestShown(false);
+    setScreen("done");
+  };
+
+  const sessionToggle = () => {
+    if (paused) { setPaused(false); setStartedAt(Date.now() - pausedMs); }
+    else { setPaused(true); setPausedMs(Date.now() - (startedAt || Date.now())); }
+  };
+  const sessMs = paused ? pausedMs : Date.now() - (startedAt || Date.now());
+  const sessSec = Math.max(0, Math.floor(sessMs / 1000));
+  const sessionClock = String(Math.floor(sessSec / 60)).padStart(2, "0") + ":" + String(sessSec % 60).padStart(2, "0");
+
+  const restAction = () => {
+    if (restOn) { setRestOn(false); }
+    else { setRestOn(true); setRestLeft(l => l || prefs.secs); }
+  };
+  const restSkip = () => { setRestOn(false); setRestShown(false); setRestLeft(0); };
+
+  const saveApiKey = (key) => { sessionStorage.setItem("claudeApiKey", key); setApiKey(key); };
+
+  const generate = async () => {
+    if (!apiKey) return;
+    setCoachBusy(true); setCoachNote("");
     try {
-      setStep("loading"); setError("");
-      const result = await generateWorkoutWithClaude(apiKey, preferences);
-      setWorkout(result); setViewingId(null); setStep("result");
+      const r = await callClaudeForRoutine(apiKey, coach);
+      setRoutines(rs => [r, ...rs]);
+      setActiveId(r.id); setScreen("preview");
+      setCoachNote("Added to your workouts.");
     } catch (err) {
-      setError(err.message); setStep("form");
+      setCoachNote(err.message || "Couldn't generate a workout. Try again.");
+    } finally {
+      setCoachBusy(false);
     }
   };
 
-  const handleSaveWorkout = async () => {
-    if (!workout) return;
-    const entry = {id:genId(), date:todayStr(), title: workout.title || "AI Generated Workout", workout};
-    await onSaveWorkout(entry);
-    setWorkout(null); setStep("form");
-    alert("Workout saved!");
-  };
+  const removeRoutine = (id) => setRoutines(rs => rs.filter(x => x.id !== id));
+  const resetData = () => { setRoutines(JSON.parse(JSON.stringify(SEED_ROUTINES))); setHistory(sortHistory(SEED_HISTORY)); setScreen("home"); };
 
-  const openHistoryItem = (entry) => { setWorkout(entry.workout); setViewingId(entry.id); setStep("result"); };
-  const handleDeleteViewed = async () => {
-    if (!viewingId) return;
-    if (!confirm("Delete this saved workout?")) return;
-    await onDeleteWorkout(viewingId);
-    setWorkout(null); setViewingId(null); setStep("form"); setView("history");
-  };
+  const chromeOn = screen !== "run" && screen !== "done";
 
-  if (showApiSetup) {
-    return (
-      <div>
-        <div style={{...S.card, background:"#2d3b52",padding:14}}>
-          <h3 style={{color:"#38bdf8",marginBottom:12}}>🔑 Set Up Claude API Key</h3>
-          <p style={{fontSize:12,color:"#cbd5e1",marginBottom:12}}>
-            Get your free Anthropic API key at <strong>console.anthropic.com</strong>. You'll get free credits to start.
-          </p>
-          <Inp
-            type="password"
-            placeholder="sk-ant-..."
-            value={tempApiKey}
-            onChange={(e) => setTempApiKey(e.target.value)}
-            style={{marginBottom:12}}
-          />
-          <div style={{display:"flex",gap:10}}>
-            <button style={{...S.btnPrimary,flex:1}} onClick={handleSaveApiKey}>Save Key</button>
-            {apiKey && <button style={{...S.btnGhost,flex:1}} onClick={() => setShowApiSetup(false)}>Cancel</button>}
-          </div>
-          <div style={{fontSize:11,color:"#64748b",marginTop:12}}>
-            Your API key is kept in this browser tab's session only — it is never written to IndexedDB or included in exports.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === "result" && workout) {
-    return (
-      <div>
-        <button style={S.btnGhost} onClick={() => { setWorkout(null); setViewingId(null); setStep("form"); }}>← Back</button>
-        <div style={{...S.cardAI,marginTop:12,cursor:"default"}}>
-          <h2 style={{color:"#38bdf8",marginBottom:12}}>{workout.title}</h2>
-
-          <div style={{marginBottom:16}}>
-            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>🔥 Warm-Up</h3>
-            {workout.warmup?.map((ex, i) => (
-              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
-                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
-                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.duration}</div>
-                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
-                {ex.videoQuery && <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#38bdf8",marginTop:4,display:"block"}}>🎥 Find video</a>}
-              </div>
-            ))}
-          </div>
-
-          <div style={{marginBottom:16}}>
-            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>💪 Main Workout</h3>
-            {workout.main?.map((ex, i) => (
-              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
-                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
-                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.sets} × {ex.reps}</div>
-                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
-                {ex.videoQuery && <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#38bdf8",marginTop:4,display:"block"}}>🎥 Find video</a>}
-              </div>
-            ))}
-          </div>
-
-          <div style={{marginBottom:16}}>
-            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>🧘 Cool-Down</h3>
-            {workout.cooldown?.map((ex, i) => (
-              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
-                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
-                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.duration}</div>
-                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
-              </div>
-            ))}
-          </div>
-
-          {workout.notes && (
-            <div style={{background:"#0f172a",padding:10,borderRadius:6,borderLeft:"3px solid #fbbf24"}}>
-              <div style={{fontSize:12,color:"#cbd5e1"}}><strong>⚠️ Notes:</strong> {workout.notes}</div>
-            </div>
-          )}
-
-          <div style={{display:"flex",gap:10,marginTop:16}}>
-            {viewingId ? (
-              <button style={{...S.btnDanger,flex:1,border:"1px solid #f87171",textAlign:"center"}} onClick={handleDeleteViewed}>🗑️ Delete</button>
-            ) : (<>
-              <button style={{...S.btnPrimary,flex:1}} onClick={handleSaveWorkout}>💾 Save Workout</button>
-              <button style={{...S.btnGhost,flex:1}} onClick={() => { setWorkout(null); setStep("form"); }}>Generate New</button>
-            </>)}
-          </div>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <div style={{minHeight: "100vh", display: "flex", justifyContent: "center", background: "var(--color-neutral-300)"}}>
+      <div style={{width: "100%", maxWidth: 430, background: "var(--color-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--color-neutral-700)"}}>Loading…</div>
+    </div>;
   }
 
   return (
-    <div>
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
-        <button style={S.toggle(view==="generate")} onClick={()=>setView("generate")}>Generate</button>
-        <button style={S.toggle(view==="history")} onClick={()=>setView("history")}>History ({aiWorkouts.length})</button>
-      </div>
+    <div style={{minHeight: "100vh", display: "flex", justifyContent: "center", background: "var(--color-neutral-300)"}}>
+      <div style={{width: "100%", maxWidth: 430, minHeight: "100vh", background: "var(--color-bg)", position: "relative", paddingBottom: 84}}>
+        {chromeOn && <Masthead sessionsLogged={history.length}/>}
 
-      {view === "history" ? (
-        aiWorkouts.length===0 ? <div style={S.empty}>No AI workouts generated yet.</div> : (
-          <div>
-            {[...aiWorkouts].sort((a,b)=>b.date.localeCompare(a.date)).map(w => (
-              <div key={w.id} style={S.cardAI} onClick={()=>openHistoryItem(w)}>
-                <div style={{fontWeight:700,color:"#8b5cf6"}}>{w.title}</div>
-                <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{w.date}</div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        <div>
-          <div style={{...S.cardAI,cursor:"default"}}>
-            <h3 style={{color:"#8b5cf6",marginBottom:12}}>🤖 AI Workout Generator</h3>
+        {screen === "home" && <Home routines={routines} go={go} begin={begin}/>}
+        {screen === "preview" && <Preview routine={activeRoutine} go={go} startActive={() => begin(activeId)}/>}
+        {screen === "run" && (
+          <Run routine={activeRoutine} exIndex={exIndex} done={done} logged={logged} prefs={prefs}
+            quitRun={finish} sessionClock={sessionClock} sessionPaused={paused} sessionToggle={sessionToggle}
+            weightUp={() => bumpWeight(5)} weightDown={() => bumpWeight(-5)} repsUp={() => bumpReps(1)} repsDown={() => bumpReps(-1)}
+            primaryAction={completeSet} skipAction={advance} tick={tick}
+            restShown={restShown} restOn={restOn} restLeft={restLeft} restAction={restAction} restSkip={restSkip}/>
+        )}
+        {screen === "done" && <Done routine={activeRoutine} doneSummary={doneSummary} goHome={() => setScreen("home")}/>}
+        {screen === "history" && <History history={history} openId={openHistory} setOpenId={setOpenHistory}/>}
+        {screen === "progress" && <Progress routines={routines} history={history}/>}
+        {screen === "coach" && <Coach apiKey={apiKey} saveApiKey={saveApiKey} coach={coach} setCoach={setCoach} coachBusy={coachBusy} coachNote={coachNote} generate={generate}/>}
+        {screen === "settings" && <Settings prefs={prefs} setPrefs={setPrefs} routines={routines} removeRoutine={removeRoutine} resetData={resetData}/>}
 
-            <Label>Fitness Level</Label>
-            <Sel value={preferences.fitnessLevel} onChange={(e) => setPreferences({...preferences,fitnessLevel:e.target.value})} style={{marginBottom:12}}>
-              <option>Beginner</option>
-              <option>Intermediate</option>
-              <option>Advanced</option>
-            </Sel>
-
-            <Label>Time Available (minutes)</Label>
-            <Sel value={preferences.timeAvailable} onChange={(e) => setPreferences({...preferences,timeAvailable:e.target.value})} style={{marginBottom:12}}>
-              <option>10</option>
-              <option>15</option>
-              <option>20</option>
-              <option>30</option>
-              <option>45</option>
-              <option>60</option>
-            </Sel>
-
-            <Label>Goal</Label>
-            <Sel value={preferences.goal} onChange={(e) => setPreferences({...preferences,goal:e.target.value})} style={{marginBottom:12}}>
-              <option>Strength</option>
-              <option>Hypertrophy</option>
-              <option>Cardio</option>
-              <option>Endurance</option>
-              <option>Flexibility</option>
-              <option>Weight Loss</option>
-              <option>General Fitness</option>
-            </Sel>
-
-            <Label>Equipment</Label>
-            <Sel value={preferences.equipment} onChange={(e) => setPreferences({...preferences,equipment:e.target.value})} style={{marginBottom:12}}>
-              <option>Bodyweight only</option>
-              <option>Dumbbells</option>
-              <option>Barbell</option>
-              <option>Resistance bands</option>
-              <option>Full gym</option>
-            </Sel>
-
-            <Label>Focus Area</Label>
-            <Sel value={preferences.focusArea} onChange={(e) => setPreferences({...preferences,focusArea:e.target.value})} style={{marginBottom:12}}>
-              <option>Full body</option>
-              <option>Upper body</option>
-              <option>Lower body</option>
-              <option>Core</option>
-              <option>Chest</option>
-              <option>Back</option>
-              <option>Shoulders</option>
-              <option>Arms</option>
-              <option>Legs</option>
-            </Sel>
-
-            <Label>Special Notes (injuries, preferences)</Label>
-            <Inp
-              value={preferences.notes}
-              onChange={(e) => setPreferences({...preferences,notes:e.target.value})}
-              placeholder="E.g., Lower back pain, avoid squats"
-              style={{marginBottom:12}}
-            />
-
-            {error && <div style={{background:"#7f1d1d",color:"#fecaca",padding:10,borderRadius:6,marginBottom:12,fontSize:12}}>{error}</div>}
-
-            <button
-              style={S.btnPrimary}
-              onClick={handleGenerate}
-              disabled={step === "loading"}
-            >
-              {step === "loading" ? "⏳ Generating..." : "🚀 Generate Workout"}
-            </button>
-
-            <button
-              style={{...S.btnGhost,width:"100%",marginTop:8}}
-              onClick={() => setShowApiSetup(true)}
-            >
-              🔑 Update API Key
-            </button>
-          </div>
-
-          <div style={{fontSize:12,color:"#64748b",marginTop:16,padding:12,background:"#1e293b",borderRadius:6}}>
-            <strong>How it works:</strong> Tell Claude your preferences and it generates a customized workout with exercise descriptions and YouTube video links. Saved workouts land in the History tab above and are stored on this device.
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Settings ──────────────────────────────────────────────────────────────────
-function Settings({people,setPeople,exercises,setExercises,onExport,onImportFile,onClearAll}) {
-  const [newPerson,setNewPerson]=useState("");
-  const [newEx,setNewEx]=useState("");
-  const fileInputRef = useRef(null);
-  const addPerson=()=>{if(newPerson.trim()&&!people.includes(newPerson)){setPeople([...people,newPerson]);setNewPerson("");}};
-  const addEx=()=>{if(newEx.trim()&&!exercises.includes(newEx)){setExercises([...exercises,newEx]);setNewEx("");}};
-  return(
-    <div>
-      {/* Data */}
-      <div style={{marginBottom:20}}>
-        <h3 style={S.sectionTitle}>💾 Data</h3>
-        <div style={S.card}>
-          <div style={{fontSize:12,color:"#94a3b8",marginBottom:12,lineHeight:1.6}}>
-            All data is stored locally on this device using IndexedDB — it survives browser restarts but not clearing site data. Export a backup regularly, or move data between devices with export/import.
-          </div>
-          <button style={{...S.btnPrimary,marginBottom:10}} onClick={onExport}>📥 Export Workouts</button>
-          <button style={{...S.btnGhost,width:"100%",padding:"10px",textAlign:"center"}} onClick={()=>fileInputRef.current?.click()}>📤 Import Workouts</button>
-          <input ref={fileInputRef} type="file" accept="application/json,.json" style={{display:"none"}}
-            onChange={e=>{ const f=e.target.files[0]; if(f) onImportFile(f); e.target.value=""; }}/>
-        </div>
-        <button style={{...S.btnDanger,width:"100%",padding:"10px",marginTop:10,border:"1px solid #334155",textAlign:"center"}} onClick={onClearAll}>🗑️ Clear All Data</button>
-      </div>
-      {/* People */}
-      <div style={{marginBottom:20}}>
-        <h3 style={S.sectionTitle}>People</h3>
-        <div style={{...S.row,marginBottom:10}}>
-          <Inp value={newPerson} onChange={e=>setNewPerson(e.target.value)} placeholder="Add person" onKeyDown={e=>e.key==="Enter"&&addPerson()}/>
-          <button style={{...S.btnPrimary,width:"auto",padding:"0 16px"}} onClick={addPerson}>Add</button>
-        </div>
-        {people.map(p=>(
-          <div key={p} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>{p}</span>
-            <button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer"}} onClick={()=>setPeople(people.filter(x=>x!==p))}>Remove</button>
-          </div>
-        ))}
-      </div>
-      {/* Exercises */}
-      <div style={{marginBottom:20}}>
-        <h3 style={S.sectionTitle}>Exercises</h3>
-        <div style={{...S.row,marginBottom:10}}>
-          <Inp value={newEx} onChange={e=>setNewEx(e.target.value)} placeholder="Add exercise" onKeyDown={e=>e.key==="Enter"&&addEx()}/>
-          <button style={{...S.btnPrimary,width:"auto",padding:"0 16px"}} onClick={addEx}>Add</button>
-        </div>
-        {exercises.map(ex=>(
-          <div key={ex} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>{ex}</span>
-            <button style={{background:"none",border:"none",color:"#f87171",cursor:"pointer"}} onClick={()=>setExercises(exercises.filter(x=>x!==ex))}>Remove</button>
-          </div>
-        ))}
+        {chromeOn && <TabBar screen={screen} onGo={go}/>}
       </div>
     </div>
   );
