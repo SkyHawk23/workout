@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0f172a"/>
 <title>Workout Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;}
-  input,select,button{font-family:inherit;font-size:14px;}
+  input,select,button,textarea{font-family:inherit;font-size:14px;}
   ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:#1e293b;} ::-webkit-scrollbar-thumb{background:#475569;border-radius:2px;}
 </style>
 </head>
@@ -22,121 +22,157 @@
 <script type="text/babel">
 const {useState, useEffect, useCallback, useRef} = React;
 
-// ── CONFIG — replace with your Google Cloud OAuth Client ID ──────────────────
-const GOOGLE_CLIENT_ID = "639248543768-mgu0ltcjsk12qm1hu2ae42s7us4kih9c.apps.googleusercontent.com";
-
-const TABS = ["Log","History","Progress","Records","Templates","Settings"];
+// ── Constants ─────────────────────────────────────────────────────────────────
+const TABS = ["Log","History","Progress","Records","Templates","AI Workout","Settings"];
+const TAB_ICON = {Log:"📝",History:"📊",Progress:"📈",Records:"🏆",Templates:"📋","AI Workout":"🤖",Settings:"⚙️"};
 const todayStr = () => new Date().toISOString().slice(0,10);
 const genId    = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-const SHEET_SETS      = "Sets";
-const SHEET_PEOPLE    = "People";
-const SHEET_EXERCISES = "Exercises";
-const SHEET_TEMPLATES = "Templates";
 
 const DEFAULT_PEOPLE    = ["Alice","Bob"];
 const DEFAULT_EXERCISES = ["Bench Press","Squat","Deadlift","Overhead Press","Barbell Row","Pull-up"];
 
-// ── Google Sheets API helpers ─────────────────────────────────────────────────
-async function sheetsGet(token, spreadsheetId, range) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
-  const res = await fetch(url, {headers:{Authorization:`Bearer ${token}`}});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets read error"); }
-  return res.json();
+// ── IndexedDB layer ──────────────────────────────────────────────────────────
+const DB_NAME    = "WorkoutTrackerDB";
+const DB_VERSION = 1;
+const STORE_WORKOUTS    = "workouts";
+const STORE_TEMPLATES   = "templates";
+const STORE_AI_WORKOUTS = "aiWorkouts";
+const STORE_KV          = "kv";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_WORKOUTS))    db.createObjectStore(STORE_WORKOUTS, {keyPath:"id"});
+      if (!db.objectStoreNames.contains(STORE_TEMPLATES))   db.createObjectStore(STORE_TEMPLATES, {keyPath:"id"});
+      if (!db.objectStoreNames.contains(STORE_AI_WORKOUTS)) db.createObjectStore(STORE_AI_WORKOUTS, {keyPath:"id"});
+      if (!db.objectStoreNames.contains(STORE_KV))          db.createObjectStore(STORE_KV);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
 }
 
-async function sheetsAppend(token, spreadsheetId, range, values) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
-  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-    body: JSON.stringify({values})});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets append error"); }
-  return res.json();
+async function idbGetAll(storeName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
 }
 
-async function sheetsClear(token, spreadsheetId, range) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:clear`;
-  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`}});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets clear error"); }
-  return res.json();
+async function idbGet(storeName, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const req = tx.objectStore(storeName).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
 }
 
-async function sheetsUpdate(token, spreadsheetId, range, values) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
-  const res = await fetch(url, {method:"PUT", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-    body: JSON.stringify({values})});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets update error"); }
-  return res.json();
+async function idbPut(storeName, value, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    if (key !== undefined) tx.objectStore(storeName).put(value, key);
+    else tx.objectStore(storeName).put(value);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
 }
 
-async function getSheetNames(token, spreadsheetId) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
-  const res = await fetch(url, {headers:{Authorization:`Bearer ${token}`}});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Sheets metadata error"); }
-  const data = await res.json();
-  return data.sheets.map(s=>s.properties.title);
+async function idbPutMany(storeName, values) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    values.forEach(v => store.put(v));
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
 }
 
-async function addSheet(token, spreadsheetId, title) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
-  const res = await fetch(url, {method:"POST", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-    body: JSON.stringify({requests:[{addSheet:{properties:{title}}}]})});
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || "Add sheet error"); }
-  return res.json();
+async function idbDelete(storeName, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
 }
 
-async function ensureSheets(token, spreadsheetId) {
-  const existing = await getSheetNames(token, spreadsheetId);
-  const needed = [
-    {name: SHEET_SETS,      headers: ["WorkoutID","Date","Person","Exercise","Weight","Reps"]},
-    {name: SHEET_PEOPLE,    headers: ["Name"]},
-    {name: SHEET_EXERCISES, headers: ["Name"]},
-    {name: SHEET_TEMPLATES, headers: ["ID","Name","SetsJSON"]},
-  ];
-  for (const s of needed) {
-    if (!existing.includes(s.name)) {
-      await addSheet(token, spreadsheetId, s.name);
-      await sheetsAppend(token, spreadsheetId, `${s.name}!A1`, [s.headers]);
-    }
-  }
+async function idbClear(storeName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
 }
 
-function extractSheetId(input) {
-  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : input.trim();
-}
+function dedupe(arr) { return [...new Set(arr.filter(Boolean))]; }
 
-// ── Data load/save ────────────────────────────────────────────────────────────
-async function loadAllData(token, spreadsheetId) {
-  await ensureSheets(token, spreadsheetId);
+// ── Claude AI integration ───────────────────────────────────────────────────
+async function generateWorkoutWithClaude(apiKey, preferences) {
+  const prompt = `You are a professional fitness coach. Generate a customized workout routine based on these preferences:
 
-  const [setsRes, peopleRes, exRes, tplRes] = await Promise.all([
-    sheetsGet(token, spreadsheetId, `${SHEET_SETS}!A:F`),
-    sheetsGet(token, spreadsheetId, `${SHEET_PEOPLE}!A:A`),
-    sheetsGet(token, spreadsheetId, `${SHEET_EXERCISES}!A:A`),
-    sheetsGet(token, spreadsheetId, `${SHEET_TEMPLATES}!A:C`),
-  ]);
+Fitness Level: ${preferences.fitnessLevel}
+Time Available: ${preferences.timeAvailable} minutes
+Goal: ${preferences.goal}
+Equipment: ${preferences.equipment}
+Focus Area: ${preferences.focusArea}
+Special Notes: ${preferences.notes || "None"}
 
-  // Parse sets into workout objects
-  const setsRows = (setsRes.values||[]).slice(1).filter(r=>r[0]);
-  const workoutMap = {};
-  setsRows.forEach(r => {
-    const [wid,date,person,exercise,weight,reps] = r;
-    if (!workoutMap[wid]) workoutMap[wid] = {id:wid, date, person, sets:[]};
-    workoutMap[wid].sets.push({exercise, weight:weight||"", reps:reps||""});
+Generate a complete workout in this exact JSON format (no markdown, just JSON):
+{
+  "title": "Brief workout name",
+  "warmup": [
+    {"name": "Exercise name", "duration": "5 min", "description": "Description", "videoQuery": "search term for YouTube"}
+  ],
+  "main": [
+    {"name": "Exercise name", "sets": 3, "reps": "8-10", "description": "Form cues", "videoQuery": "search term for YouTube"}
+  ],
+  "cooldown": [
+    {"name": "Stretch name", "duration": "2 min", "description": "Description"}
+  ],
+  "notes": "Any safety tips or modifications"
+}`;
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
+      messages: [
+        { role: "user", content: prompt }
+      ],
+    }),
   });
 
-  const people    = (peopleRes.values||[]).slice(1).filter(r=>r[0]).map(r=>r[0]);
-  const exercises = (exRes.values||[]).slice(1).filter(r=>r[0]).map(r=>r[0]);
-  const templates = (tplRes.values||[]).slice(1).filter(r=>r[0]).map(r=>({
-    id:r[0], name:r[1], sets: JSON.parse(r[2]||"[]")
-  }));
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || "Claude API error");
+  }
 
-  return {
-    logs: Object.values(workoutMap),
-    people: people.length ? people : DEFAULT_PEOPLE,
-    exercises: exercises.length ? exercises : DEFAULT_EXERCISES,
-    templates,
-  };
+  const data = await response.json();
+  const textContent = data.content[0].text;
+
+  const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Invalid response format");
+
+  return JSON.parse(jsonMatch[0]);
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -148,8 +184,9 @@ const S = {
   tabs:        {display:"flex",gap:2,overflowX:"auto",paddingBottom:0},
   tab:    (a) =>({padding:"8px 10px",borderRadius:"6px 6px 0 0",border:"none",cursor:"pointer",
                   background:a?"#0f172a":"transparent",color:a?"#38bdf8":"#94a3b8",fontWeight:a?700:400,fontSize:12,whiteSpace:"nowrap"}),
-  body:        {padding:16},
+  body:        {padding:16,paddingBottom:40},
   card:        {background:"#1e293b",borderRadius:8,padding:10,marginBottom:8},
+  cardAI:      {background:"#1e293b",borderRadius:8,padding:14,marginBottom:12,borderLeft:"3px solid #8b5cf6",cursor:"pointer"},
   row:         {display:"flex",gap:8},
   label:       {fontSize:11,color:"#64748b",marginBottom:3},
   input:       {width:"100%",background:"#334155",border:"1px solid #475569",borderRadius:6,padding:"9px 10px",color:"#e2e8f0",fontSize:14,outline:"none"},
@@ -159,6 +196,8 @@ const S = {
   btnDanger:   {background:"none",border:"1px solid #334155",color:"#f87171",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:13},
   sectionTitle:{fontWeight:700,color:"#cbd5e1",fontSize:15,margin:"0 0 10px"},
   empty:       {textAlign:"center",color:"#475569",marginTop:40,fontSize:14},
+  toggle: (a) => ({flex:1,padding:"9px",borderRadius:8,border:a?"none":"1px solid #334155",
+                    background:a?"#8b5cf6":"transparent",color:a?"#fff":"#94a3b8",fontWeight:a?700:400,cursor:"pointer"}),
 };
 
 function Label({children})          { return <div style={S.label}>{children}</div>; }
@@ -169,7 +208,7 @@ function Spinner({text="Loading…"}) { return <div style={{textAlign:"center",p
 function Modal({title,children,onClose}) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:100,display:"flex",alignItems:"flex-end"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#1e293b",borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxHeight:"75vh",overflowY:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#1e293b",borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxWidth:480,margin:"0 auto",maxHeight:"75vh",overflowY:"auto"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
           <strong style={{fontSize:15}}>{title}</strong>
           <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
@@ -180,244 +219,215 @@ function Modal({title,children,onClose}) {
   );
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-function useGoogleAuth() {
-  const [token, setToken]     = useState(null);
-  const [userInfo, setUserInfo] = useState(null);
-  const tokenRef = useRef(null);
-  const clientRef = useRef(null);
-
-  const requestToken = useCallback(() => {
-    if (!clientRef.current) {
-      clientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile",
-        callback: async (resp) => {
-          if (resp.error) { console.error(resp); return; }
-          tokenRef.current = resp.access_token;
-          setToken(resp.access_token);
-          // Fetch user info
-          const r = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-            headers:{Authorization:`Bearer ${resp.access_token}`}
-          });
-          const u = await r.json();
-          setUserInfo(u);
-          // Schedule refresh before expiry (tokens last ~1hr)
-          setTimeout(()=>{ if(tokenRef.current) clientRef.current.requestAccessToken({prompt:""}); },
-            (resp.expires_in - 120) * 1000);
-        },
-      });
-    }
-    clientRef.current.requestAccessToken({prompt: token ? "" : "select_account"});
-  }, [token]);
-
-  const signOut = useCallback(() => {
-    if (tokenRef.current) window.google.accounts.oauth2.revoke(tokenRef.current);
-    tokenRef.current = null;
-    setToken(null);
-    setUserInfo(null);
-  }, []);
-
-  return {token, userInfo, requestToken, signOut};
-}
+const emptySet = (exercises) => ({id:genId(), exercise:exercises[0]||"", weight:"", reps:""});
 
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
-  const {token, userInfo, requestToken, signOut} = useGoogleAuth();
-  const [gsiReady, setGsiReady]   = useState(false);
-  const [tab, setTab]             = useState(0);
-  const [sheetId, setSheetId]     = useState(() => localStorage.getItem("wt_sheetId") || "");
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState("");
-  const [logs, setLogs]           = useState([]);
-  const [people, setPeople]       = useState(DEFAULT_PEOPLE);
-  const [exercises, setExercises] = useState(DEFAULT_EXERCISES);
-  const [templates, setTemplates] = useState([]);
-  const [status, setStatus]       = useState(null);
+  const [tab, setTab]         = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
+  const [status, setStatus]   = useState(null);
+  const [data, setData]       = useState({workouts:[], people:DEFAULT_PEOPLE, exercises:DEFAULT_EXERCISES, templates:[], aiWorkouts:[]});
+  const [apiKey, setApiKey]   = useState(() => sessionStorage.getItem("claudeApiKey") || "");
+  const [importPending, setImportPending] = useState(null);
 
-  // Wait for GSI script to load
-  useEffect(()=>{
-    const check = setInterval(()=>{ if(window.google?.accounts?.oauth2){ setGsiReady(true); clearInterval(check); }}, 200);
-    return ()=>clearInterval(check);
-  },[]);
+  const showStatus = (s) => { setStatus(s); setTimeout(()=>setStatus(null), s==="error"?4000:2000); };
 
-  const showStatus = (s) => { setStatus(s); setTimeout(()=>setStatus(null), s==="error"?4000:2500); };
-
-  const loadData = useCallback(async () => {
-    if (!token || !sheetId) return;
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const d = await loadAllData(token, sheetId);
-      setLogs(d.logs); setPeople(d.people); setExercises(d.exercises); setTemplates(d.templates);
-    } catch(e) { setError(e.message); }
+      const [workouts, templates, aiWorkouts, people, exercises] = await Promise.all([
+        idbGetAll(STORE_WORKOUTS),
+        idbGetAll(STORE_TEMPLATES),
+        idbGetAll(STORE_AI_WORKOUTS),
+        idbGet(STORE_KV, "people"),
+        idbGet(STORE_KV, "exercises"),
+      ]);
+      const finalPeople    = (people && people.length) ? people : DEFAULT_PEOPLE;
+      const finalExercises = (exercises && exercises.length) ? exercises : DEFAULT_EXERCISES;
+      if (!people)    await idbPut(STORE_KV, finalPeople, "people");
+      if (!exercises) await idbPut(STORE_KV, finalExercises, "exercises");
+      setData({workouts, templates, aiWorkouts, people:finalPeople, exercises:finalExercises});
+    } catch (e) {
+      setError(e.message);
+    }
     setLoading(false);
-  }, [token, sheetId]);
+  }, []);
 
-  useEffect(()=>{ if(token && sheetId) loadData(); }, [token, sheetId]);
+  useEffect(() => { load(); }, [load]);
 
+  // ── Workouts ──
   const saveWorkout = async (workout) => {
-    setLogs(prev=>[...prev, workout]);
+    setData(d => ({...d, workouts:[...d.workouts, workout]}));
     showStatus("saving");
-    try {
-      const rows = workout.sets.map(s=>[workout.id, workout.date, workout.person, s.exercise, s.weight, s.reps]);
-      await sheetsAppend(token, sheetId, `${SHEET_SETS}!A:F`, rows);
-      showStatus("ok");
-    } catch(e) { showStatus("error"); setLogs(prev=>prev.filter(l=>l.id!==workout.id)); }
+    try { await idbPut(STORE_WORKOUTS, workout); showStatus("ok"); }
+    catch (e) { showStatus("error"); setData(d => ({...d, workouts:d.workouts.filter(w=>w.id!==workout.id)})); }
   };
 
   const deleteWorkout = async (id) => {
-    const prev = [...logs];
-    setLogs(l=>l.filter(x=>x.id!==id));
-    try {
-      // Re-read all sets, filter out the deleted workout, rewrite
-      const res = await sheetsGet(token, sheetId, `${SHEET_SETS}!A:F`);
-      const allRows = (res.values||[]);
-      const header = allRows[0]||["WorkoutID","Date","Person","Exercise","Weight","Reps"];
-      const kept = allRows.slice(1).filter(r=>r[0]!==id);
-      await sheetsClear(token, sheetId, `${SHEET_SETS}!A:F`);
-      await sheetsAppend(token, sheetId, `${SHEET_SETS}!A:F`, [header, ...kept]);
-      showStatus("ok");
-    } catch(e) { showStatus("error"); setLogs(prev); }
+    const prev = data.workouts;
+    setData(d => ({...d, workouts:d.workouts.filter(w=>w.id!==id)}));
+    try { await idbDelete(STORE_WORKOUTS, id); showStatus("ok"); }
+    catch (e) { showStatus("error"); setData(d => ({...d, workouts:prev})); }
   };
 
+  // ── People / Exercises ──
   const savePeople = async (list) => {
-    setPeople(list);
-    try {
-      await sheetsClear(token, sheetId, `${SHEET_PEOPLE}!A:A`);
-      await sheetsAppend(token, sheetId, `${SHEET_PEOPLE}!A:A`, [["Name"],...list.map(p=>[p])]);
-    } catch(e) { showStatus("error"); }
+    setData(d => ({...d, people:list}));
+    try { await idbPut(STORE_KV, list, "people"); } catch (e) { showStatus("error"); }
   };
-
   const saveExercises = async (list) => {
-    setExercises(list);
-    try {
-      await sheetsClear(token, sheetId, `${SHEET_EXERCISES}!A:A`);
-      await sheetsAppend(token, sheetId, `${SHEET_EXERCISES}!A:A`, [["Name"],...list.map(e=>[e])]);
-    } catch(e) { showStatus("error"); }
+    setData(d => ({...d, exercises:list}));
+    try { await idbPut(STORE_KV, list, "exercises"); } catch (e) { showStatus("error"); }
   };
 
-  const saveTemplatesFn = async (list) => {
-    setTemplates(list);
+  // ── Templates ──
+  const saveTemplates = async (list) => {
+    setData(d => ({...d, templates:list}));
+    try { await idbClear(STORE_TEMPLATES); await idbPutMany(STORE_TEMPLATES, list); }
+    catch (e) { showStatus("error"); }
+  };
+
+  // ── AI Workouts ──
+  const saveAiWorkout = async (entry) => {
+    setData(d => ({...d, aiWorkouts:[...d.aiWorkouts, entry]}));
+    try { await idbPut(STORE_AI_WORKOUTS, entry); }
+    catch (e) { showStatus("error"); setData(d => ({...d, aiWorkouts:d.aiWorkouts.filter(w=>w.id!==entry.id)})); }
+  };
+  const deleteAiWorkout = async (id) => {
+    const prev = data.aiWorkouts;
+    setData(d => ({...d, aiWorkouts:d.aiWorkouts.filter(w=>w.id!==id)}));
+    try { await idbDelete(STORE_AI_WORKOUTS, id); }
+    catch (e) { showStatus("error"); setData(d => ({...d, aiWorkouts:prev})); }
+  };
+
+  // ── Export / Import ──
+  const handleExport = () => {
+    const payload = {
+      app: "workout-tracker", version: 1, exportedAt: new Date().toISOString(),
+      workouts: data.workouts, people: data.people, exercises: data.exercises,
+      templates: data.templates, aiWorkouts: data.aiWorkouts,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `workouts-backup-${todayStr()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (typeof parsed !== "object" || parsed === null) throw new Error("Not a valid backup file");
+        setImportPending(parsed);
+      } catch (e) {
+        alert("Could not read backup file: " + e.message);
+      }
+    };
+    reader.onerror = () => alert("Could not read file");
+    reader.readAsText(file);
+  };
+
+  const runImport = async (mode) => {
+    const p = importPending;
+    if (!p) return;
+    const wk  = Array.isArray(p.workouts) ? p.workouts : [];
+    const tpl = Array.isArray(p.templates) ? p.templates : [];
+    const ai  = Array.isArray(p.aiWorkouts) ? p.aiWorkouts : [];
+    const ppl = Array.isArray(p.people) ? p.people : [];
+    const exs = Array.isArray(p.exercises) ? p.exercises : [];
     try {
-      await sheetsClear(token, sheetId, `${SHEET_TEMPLATES}!A:C`);
-      await sheetsAppend(token, sheetId, `${SHEET_TEMPLATES}!A:C`, [["ID","Name","SetsJSON"],...list.map(t=>[t.id,t.name,JSON.stringify(t.sets)])]);
-    } catch(e) { showStatus("error"); }
+      if (mode === "replace") {
+        await idbClear(STORE_WORKOUTS); await idbClear(STORE_TEMPLATES); await idbClear(STORE_AI_WORKOUTS);
+        await idbPutMany(STORE_WORKOUTS, wk);
+        await idbPutMany(STORE_TEMPLATES, tpl);
+        await idbPutMany(STORE_AI_WORKOUTS, ai);
+        await idbPut(STORE_KV, ppl.length ? ppl : DEFAULT_PEOPLE, "people");
+        await idbPut(STORE_KV, exs.length ? exs : DEFAULT_EXERCISES, "exercises");
+      } else {
+        await idbPutMany(STORE_WORKOUTS, wk);
+        await idbPutMany(STORE_TEMPLATES, tpl);
+        await idbPutMany(STORE_AI_WORKOUTS, ai);
+        await idbPut(STORE_KV, dedupe([...data.people, ...ppl]), "people");
+        await idbPut(STORE_KV, dedupe([...data.exercises, ...exs]), "exercises");
+      }
+      setImportPending(null);
+      await load();
+      showStatus("ok");
+      alert(mode === "replace" ? "Data replaced from backup." : "Backup merged in.");
+    } catch (e) {
+      showStatus("error");
+      alert("Import failed: " + e.message);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm("Delete ALL workouts, templates, and AI workout history? This cannot be undone.")) return;
+    try {
+      await idbClear(STORE_WORKOUTS); await idbClear(STORE_TEMPLATES); await idbClear(STORE_AI_WORKOUTS);
+      await idbPut(STORE_KV, DEFAULT_PEOPLE, "people");
+      await idbPut(STORE_KV, DEFAULT_EXERCISES, "exercises");
+      await load();
+      showStatus("ok");
+    } catch (e) { showStatus("error"); }
   };
 
   const StatusBar = () => {
     if (!status) return null;
-    const cfg = {saving:{color:"#fbbf24",text:"Saving…"},ok:{color:"#4ade80",text:"✓ Saved to Sheets"},error:{color:"#f87171",text:"✗ Save failed"}};
+    const cfg = {saving:{color:"#fbbf24",text:"Saving…"},ok:{color:"#4ade80",text:"✓ Saved"},error:{color:"#f87171",text:"✗ Save failed"}};
     const c = cfg[status];
     return <div style={{position:"fixed",bottom:16,left:"50%",transform:"translateX(-50%)",
       background:"#1e293b",border:`1px solid ${c.color}`,color:c.color,borderRadius:20,
       padding:"8px 18px",fontSize:13,zIndex:200,boxShadow:"0 4px 12px rgba(0,0,0,.4)",whiteSpace:"nowrap"}}>{c.text}</div>;
   };
 
-  // ── Not signed in ──
-  if (!gsiReady || !token) {
-    return (
-      <div style={{...S.page,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
-        <div style={{padding:32,textAlign:"center",maxWidth:340}}>
-          <div style={{fontSize:52,marginBottom:16}}>💪</div>
-          <h2 style={{color:"#38bdf8",marginBottom:8,fontSize:22}}>Workout Tracker</h2>
-          <p style={{color:"#94a3b8",marginBottom:32,lineHeight:1.6,fontSize:14}}>
-            Sign in with Google to sync your workouts to your own Google Sheet.
-          </p>
-          <button onClick={requestToken} disabled={!gsiReady}
-            style={{background:"#fff",border:"none",borderRadius:8,padding:"12px 24px",
-              display:"flex",alignItems:"center",gap:10,margin:"0 auto",cursor:"pointer",
-              fontWeight:700,fontSize:15,color:"#1e293b",opacity:gsiReady?1:0.5}}>
-            <svg width="20" height="20" viewBox="0 0 48 48">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-            </svg>
-            Sign in with Google
-          </button>
-          {!gsiReady && <p style={{color:"#475569",fontSize:12,marginTop:12}}>Loading Google Sign-In…</p>}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Signed in but no sheet yet ──
-  if (!sheetId) {
-    return (
-      <div style={{...S.page,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
-        <div style={{padding:32,textAlign:"center",maxWidth:340}}>
-          <div style={{fontSize:52,marginBottom:12}}>📊</div>
-          <h2 style={{color:"#38bdf8",marginBottom:8}}>Connect Your Sheet</h2>
-          <p style={{color:"#94a3b8",marginBottom:24,lineHeight:1.6,fontSize:14}}>
-            Paste the link to a Google Sheet where your workout data will be stored. The app will create the required tabs automatically.
-          </p>
-          <SheetConnectForm onConnect={(id)=>{ localStorage.setItem("wt_sheetId",id); setSheetId(id); }}
-            onSignOut={signOut} userInfo={userInfo}/>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Main app ──
   return (
     <div style={S.page}>
       <div style={S.header}>
         <div style={S.headerTop}>
           <span style={S.title}>💪 Workout Tracker</span>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={loadData} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",fontSize:16}}>⟳</button>
-            {userInfo?.picture && <img src={userInfo.picture} style={{width:28,height:28,borderRadius:"50%",cursor:"pointer"}} onClick={()=>setTab(5)} title={userInfo.name}/>}
-          </div>
+          <span style={{fontSize:11,color:"#475569"}}>offline · on-device</span>
         </div>
         <div style={S.tabs}>
-          {TABS.map((t,i)=><button key={t} style={S.tab(tab===i)} onClick={()=>setTab(i)}>{t}</button>)}
+          {TABS.map((t,i)=><button key={t} style={S.tab(tab===i)} onClick={()=>setTab(i)}>{TAB_ICON[t]} {t}</button>)}
         </div>
       </div>
       <div style={S.body}>
         {error && <div style={{background:"#450a0a",border:"1px solid #f87171",borderRadius:8,padding:"10px 12px",
           marginBottom:12,fontSize:13,color:"#fca5a5"}}>{error}
-          <button onClick={loadData} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",marginLeft:8}}>Retry</button>
+          <button onClick={load} style={{background:"none",border:"none",color:"#38bdf8",cursor:"pointer",marginLeft:8}}>Retry</button>
         </div>}
         {loading ? <Spinner/> : (<>
-          {tab===0 && <LogWorkout people={people} exercises={exercises} templates={templates} onSave={saveWorkout}/>}
-          {tab===1 && <History logs={logs} onDelete={deleteWorkout}/>}
-          {tab===2 && <Progress logs={logs} people={people} exercises={exercises}/>}
-          {tab===3 && <Records logs={logs} people={people} exercises={exercises}/>}
-          {tab===4 && <Templates templates={templates} setTemplates={saveTemplatesFn} exercises={exercises}/>}
-          {tab===5 && <Settings people={people} setPeople={savePeople} exercises={exercises}
-            setExercises={saveExercises} sheetId={sheetId} userInfo={userInfo}
-            onChangeSheet={()=>{ localStorage.removeItem("wt_sheetId"); setSheetId(""); setLogs([]); }}
-            onSignOut={()=>{ signOut(); localStorage.removeItem("wt_sheetId"); setSheetId(""); setLogs([]); }}/>}
+          {tab===0 && <LogWorkout people={data.people} exercises={data.exercises} templates={data.templates} onSave={saveWorkout}/>}
+          {tab===1 && <History logs={data.workouts} onDelete={deleteWorkout}/>}
+          {tab===2 && <Progress logs={data.workouts} people={data.people} exercises={data.exercises}/>}
+          {tab===3 && <Records logs={data.workouts} people={data.people} exercises={data.exercises}/>}
+          {tab===4 && <Templates templates={data.templates} setTemplates={saveTemplates} exercises={data.exercises}/>}
+          {tab===5 && <AIWorkout apiKey={apiKey} setApiKey={setApiKey} aiWorkouts={data.aiWorkouts} onSaveWorkout={saveAiWorkout} onDeleteWorkout={deleteAiWorkout}/>}
+          {tab===6 && <Settings people={data.people} setPeople={savePeople} exercises={data.exercises} setExercises={saveExercises}
+            onExport={handleExport} onImportFile={handleImportFile} onClearAll={handleClearAll}/>}
         </>)}
       </div>
       <StatusBar/>
-    </div>
-  );
-}
-
-function SheetConnectForm({onConnect, onSignOut, userInfo}) {
-  const [val, setVal] = useState("");
-  const [err, setErr] = useState("");
-  const connect = () => {
-    const id = extractSheetId(val);
-    if (!id) { setErr("Please paste a valid Google Sheet link or ID"); return; }
-    onConnect(id);
-  };
-  return (
-    <div>
-      {userInfo && <p style={{color:"#94a3b8",fontSize:13,marginBottom:16}}>Signed in as <strong style={{color:"#e2e8f0"}}>{userInfo.name}</strong></p>}
-      <Inp value={val} onChange={e=>{setVal(e.target.value);setErr("");}}
-        placeholder="https://docs.google.com/spreadsheets/d/..." style={{marginBottom:8,textAlign:"left"}}/>
-      {err && <p style={{color:"#f87171",fontSize:12,marginBottom:8}}>{err}</p>}
-      <button style={{...S.btnPrimary,marginBottom:12}} onClick={connect}>Connect Sheet</button>
-      <button style={{...S.btnGhost,width:"100%"}} onClick={onSignOut}>Sign out</button>
+      {importPending && (
+        <Modal title="Import Backup" onClose={()=>setImportPending(null)}>
+          <p style={{color:"#94a3b8",fontSize:13,marginBottom:16,lineHeight:1.6}}>
+            This file has {(importPending.workouts||[]).length} workout(s), {(importPending.templates||[]).length} template(s) and {(importPending.aiWorkouts||[]).length} AI workout(s).
+            Merge it with your current data, or replace everything currently stored on this device?
+          </p>
+          <button style={{...S.btnPrimary,marginBottom:10}} onClick={()=>runImport("merge")}>🔀 Merge with existing data</button>
+          <button style={{...S.btnDanger,width:"100%",padding:"12px",marginBottom:10,border:"1px solid #f87171"}} onClick={()=>runImport("replace")}>♻️ Replace all data</button>
+          <button style={{...S.btnGhost,width:"100%"}} onClick={()=>setImportPending(null)}>Cancel</button>
+        </Modal>
+      )}
     </div>
   );
 }
 
 // ── Log Workout ───────────────────────────────────────────────────────────────
-const emptySet = (exercises) => ({id:genId(), exercise:exercises[0]||"", weight:"", reps:""});
-
 function LogWorkout({people, exercises, templates, onSave}) {
   const [date, setDate]         = useState(todayStr());
   const [activePeople, setActivePeople] = useState([people[0]||""]);
@@ -716,31 +726,276 @@ function Templates({templates, setTemplates, exercises}) {
   );
 }
 
+// ── AI Workout Generator ──────────────────────────────────────────────────────
+function AIWorkout({apiKey, setApiKey, aiWorkouts, onSaveWorkout, onDeleteWorkout}) {
+  const [view, setView] = useState("generate"); // generate | history
+  const [showApiSetup, setShowApiSetup] = useState(!apiKey);
+  const [tempApiKey, setTempApiKey] = useState("");
+  const [step, setStep] = useState("form"); // form, loading, result
+  const [workout, setWorkout] = useState(null);
+  const [viewingId, setViewingId] = useState(null);
+  const [error, setError] = useState("");
+  const [preferences, setPreferences] = useState({
+    fitnessLevel: "Intermediate",
+    timeAvailable: "30",
+    goal: "Strength",
+    equipment: "Dumbbells",
+    focusArea: "Full body",
+    notes: "",
+  });
+
+  const handleSaveApiKey = () => {
+    if (!tempApiKey.trim()) return;
+    sessionStorage.setItem("claudeApiKey", tempApiKey);
+    setApiKey(tempApiKey);
+    setShowApiSetup(false);
+  };
+
+  const handleGenerate = async () => {
+    if (!apiKey) { setShowApiSetup(true); return; }
+    try {
+      setStep("loading"); setError("");
+      const result = await generateWorkoutWithClaude(apiKey, preferences);
+      setWorkout(result); setViewingId(null); setStep("result");
+    } catch (err) {
+      setError(err.message); setStep("form");
+    }
+  };
+
+  const handleSaveWorkout = async () => {
+    if (!workout) return;
+    const entry = {id:genId(), date:todayStr(), title: workout.title || "AI Generated Workout", workout};
+    await onSaveWorkout(entry);
+    setWorkout(null); setStep("form");
+    alert("Workout saved!");
+  };
+
+  const openHistoryItem = (entry) => { setWorkout(entry.workout); setViewingId(entry.id); setStep("result"); };
+  const handleDeleteViewed = async () => {
+    if (!viewingId) return;
+    if (!confirm("Delete this saved workout?")) return;
+    await onDeleteWorkout(viewingId);
+    setWorkout(null); setViewingId(null); setStep("form"); setView("history");
+  };
+
+  if (showApiSetup) {
+    return (
+      <div>
+        <div style={{...S.card, background:"#2d3b52",padding:14}}>
+          <h3 style={{color:"#38bdf8",marginBottom:12}}>🔑 Set Up Claude API Key</h3>
+          <p style={{fontSize:12,color:"#cbd5e1",marginBottom:12}}>
+            Get your free Anthropic API key at <strong>console.anthropic.com</strong>. You'll get free credits to start.
+          </p>
+          <Inp
+            type="password"
+            placeholder="sk-ant-..."
+            value={tempApiKey}
+            onChange={(e) => setTempApiKey(e.target.value)}
+            style={{marginBottom:12}}
+          />
+          <div style={{display:"flex",gap:10}}>
+            <button style={{...S.btnPrimary,flex:1}} onClick={handleSaveApiKey}>Save Key</button>
+            {apiKey && <button style={{...S.btnGhost,flex:1}} onClick={() => setShowApiSetup(false)}>Cancel</button>}
+          </div>
+          <div style={{fontSize:11,color:"#64748b",marginTop:12}}>
+            Your API key is kept in this browser tab's session only — it is never written to IndexedDB or included in exports.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "result" && workout) {
+    return (
+      <div>
+        <button style={S.btnGhost} onClick={() => { setWorkout(null); setViewingId(null); setStep("form"); }}>← Back</button>
+        <div style={{...S.cardAI,marginTop:12,cursor:"default"}}>
+          <h2 style={{color:"#38bdf8",marginBottom:12}}>{workout.title}</h2>
+
+          <div style={{marginBottom:16}}>
+            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>🔥 Warm-Up</h3>
+            {workout.warmup?.map((ex, i) => (
+              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
+                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
+                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.duration}</div>
+                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
+                {ex.videoQuery && <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#38bdf8",marginTop:4,display:"block"}}>🎥 Find video</a>}
+              </div>
+            ))}
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>💪 Main Workout</h3>
+            {workout.main?.map((ex, i) => (
+              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
+                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
+                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.sets} × {ex.reps}</div>
+                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
+                {ex.videoQuery && <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.videoQuery)}`} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#38bdf8",marginTop:4,display:"block"}}>🎥 Find video</a>}
+              </div>
+            ))}
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <h3 style={{color:"#cbd5e1",fontSize:14,fontWeight:700,marginBottom:8}}>🧘 Cool-Down</h3>
+            {workout.cooldown?.map((ex, i) => (
+              <div key={i} style={{background:"#0f172a",padding:10,borderRadius:6,marginBottom:8}}>
+                <div style={{fontWeight:700,color:"#fbbf24"}}>{ex.name}</div>
+                <div style={{fontSize:12,color:"#94a3b8"}}>{ex.duration}</div>
+                <div style={{fontSize:12,color:"#cbd5e1",marginTop:4}}>{ex.description}</div>
+              </div>
+            ))}
+          </div>
+
+          {workout.notes && (
+            <div style={{background:"#0f172a",padding:10,borderRadius:6,borderLeft:"3px solid #fbbf24"}}>
+              <div style={{fontSize:12,color:"#cbd5e1"}}><strong>⚠️ Notes:</strong> {workout.notes}</div>
+            </div>
+          )}
+
+          <div style={{display:"flex",gap:10,marginTop:16}}>
+            {viewingId ? (
+              <button style={{...S.btnDanger,flex:1,border:"1px solid #f87171",textAlign:"center"}} onClick={handleDeleteViewed}>🗑️ Delete</button>
+            ) : (<>
+              <button style={{...S.btnPrimary,flex:1}} onClick={handleSaveWorkout}>💾 Save Workout</button>
+              <button style={{...S.btnGhost,flex:1}} onClick={() => { setWorkout(null); setStep("form"); }}>Generate New</button>
+            </>)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <button style={S.toggle(view==="generate")} onClick={()=>setView("generate")}>Generate</button>
+        <button style={S.toggle(view==="history")} onClick={()=>setView("history")}>History ({aiWorkouts.length})</button>
+      </div>
+
+      {view === "history" ? (
+        aiWorkouts.length===0 ? <div style={S.empty}>No AI workouts generated yet.</div> : (
+          <div>
+            {[...aiWorkouts].sort((a,b)=>b.date.localeCompare(a.date)).map(w => (
+              <div key={w.id} style={S.cardAI} onClick={()=>openHistoryItem(w)}>
+                <div style={{fontWeight:700,color:"#8b5cf6"}}>{w.title}</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{w.date}</div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <div>
+          <div style={{...S.cardAI,cursor:"default"}}>
+            <h3 style={{color:"#8b5cf6",marginBottom:12}}>🤖 AI Workout Generator</h3>
+
+            <Label>Fitness Level</Label>
+            <Sel value={preferences.fitnessLevel} onChange={(e) => setPreferences({...preferences,fitnessLevel:e.target.value})} style={{marginBottom:12}}>
+              <option>Beginner</option>
+              <option>Intermediate</option>
+              <option>Advanced</option>
+            </Sel>
+
+            <Label>Time Available (minutes)</Label>
+            <Sel value={preferences.timeAvailable} onChange={(e) => setPreferences({...preferences,timeAvailable:e.target.value})} style={{marginBottom:12}}>
+              <option>10</option>
+              <option>15</option>
+              <option>20</option>
+              <option>30</option>
+              <option>45</option>
+              <option>60</option>
+            </Sel>
+
+            <Label>Goal</Label>
+            <Sel value={preferences.goal} onChange={(e) => setPreferences({...preferences,goal:e.target.value})} style={{marginBottom:12}}>
+              <option>Strength</option>
+              <option>Hypertrophy</option>
+              <option>Cardio</option>
+              <option>Endurance</option>
+              <option>Flexibility</option>
+              <option>Weight Loss</option>
+              <option>General Fitness</option>
+            </Sel>
+
+            <Label>Equipment</Label>
+            <Sel value={preferences.equipment} onChange={(e) => setPreferences({...preferences,equipment:e.target.value})} style={{marginBottom:12}}>
+              <option>Bodyweight only</option>
+              <option>Dumbbells</option>
+              <option>Barbell</option>
+              <option>Resistance bands</option>
+              <option>Full gym</option>
+            </Sel>
+
+            <Label>Focus Area</Label>
+            <Sel value={preferences.focusArea} onChange={(e) => setPreferences({...preferences,focusArea:e.target.value})} style={{marginBottom:12}}>
+              <option>Full body</option>
+              <option>Upper body</option>
+              <option>Lower body</option>
+              <option>Core</option>
+              <option>Chest</option>
+              <option>Back</option>
+              <option>Shoulders</option>
+              <option>Arms</option>
+              <option>Legs</option>
+            </Sel>
+
+            <Label>Special Notes (injuries, preferences)</Label>
+            <Inp
+              value={preferences.notes}
+              onChange={(e) => setPreferences({...preferences,notes:e.target.value})}
+              placeholder="E.g., Lower back pain, avoid squats"
+              style={{marginBottom:12}}
+            />
+
+            {error && <div style={{background:"#7f1d1d",color:"#fecaca",padding:10,borderRadius:6,marginBottom:12,fontSize:12}}>{error}</div>}
+
+            <button
+              style={S.btnPrimary}
+              onClick={handleGenerate}
+              disabled={step === "loading"}
+            >
+              {step === "loading" ? "⏳ Generating..." : "🚀 Generate Workout"}
+            </button>
+
+            <button
+              style={{...S.btnGhost,width:"100%",marginTop:8}}
+              onClick={() => setShowApiSetup(true)}
+            >
+              🔑 Update API Key
+            </button>
+          </div>
+
+          <div style={{fontSize:12,color:"#64748b",marginTop:16,padding:12,background:"#1e293b",borderRadius:6}}>
+            <strong>How it works:</strong> Tell Claude your preferences and it generates a customized workout with exercise descriptions and YouTube video links. Saved workouts land in the History tab above and are stored on this device.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
-function Settings({people,setPeople,exercises,setExercises,sheetId,userInfo,onChangeSheet,onSignOut}) {
+function Settings({people,setPeople,exercises,setExercises,onExport,onImportFile,onClearAll}) {
   const [newPerson,setNewPerson]=useState("");
   const [newEx,setNewEx]=useState("");
+  const fileInputRef = useRef(null);
   const addPerson=()=>{if(newPerson.trim()&&!people.includes(newPerson)){setPeople([...people,newPerson]);setNewPerson("");}};
   const addEx=()=>{if(newEx.trim()&&!exercises.includes(newEx)){setExercises([...exercises,newEx]);setNewEx("");}};
   return(
     <div>
-      {/* Account */}
+      {/* Data */}
       <div style={{marginBottom:20}}>
-        <h3 style={S.sectionTitle}>👤 Account</h3>
-        <div style={{...S.card,display:"flex",alignItems:"center",gap:12}}>
-          {userInfo?.picture&&<img src={userInfo.picture} style={{width:40,height:40,borderRadius:"50%"}}/>}
-          <div style={{flex:1}}>
-            <div style={{fontWeight:700}}>{userInfo?.name}</div>
-            <div style={{fontSize:12,color:"#94a3b8"}}>{userInfo?.email}</div>
+        <h3 style={S.sectionTitle}>💾 Data</h3>
+        <div style={S.card}>
+          <div style={{fontSize:12,color:"#94a3b8",marginBottom:12,lineHeight:1.6}}>
+            All data is stored locally on this device using IndexedDB — it survives browser restarts but not clearing site data. Export a backup regularly, or move data between devices with export/import.
           </div>
+          <button style={{...S.btnPrimary,marginBottom:10}} onClick={onExport}>📥 Export Workouts</button>
+          <button style={{...S.btnGhost,width:"100%",padding:"10px",textAlign:"center"}} onClick={()=>fileInputRef.current?.click()}>📤 Import Workouts</button>
+          <input ref={fileInputRef} type="file" accept="application/json,.json" style={{display:"none"}}
+            onChange={e=>{ const f=e.target.files[0]; if(f) onImportFile(f); e.target.value=""; }}/>
         </div>
-        <div style={{...S.row,marginTop:8}}>
-          <button style={{...S.btnGhost,flex:1}} onClick={onChangeSheet}>Change Sheet</button>
-          <button style={{...S.btnDanger,flex:1}} onClick={onSignOut}>Sign Out</button>
-        </div>
-        <div style={{marginTop:8,fontSize:11,color:"#475569",wordBreak:"break-all"}}>
-          Sheet ID: {sheetId}
-        </div>
+        <button style={{...S.btnDanger,width:"100%",padding:"10px",marginTop:10,border:"1px solid #334155",textAlign:"center"}} onClick={onClearAll}>🗑️ Clear All Data</button>
       </div>
       {/* People */}
       <div style={{marginBottom:20}}>
