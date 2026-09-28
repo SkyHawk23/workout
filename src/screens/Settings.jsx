@@ -6,6 +6,7 @@ import Btn from "../components/Btn.jsx";
 import Seg from "../components/Seg.jsx";
 import { TextInput } from "../components/Field.jsx";
 import { kicker } from "../lib/helpers.js";
+import { localToday } from "../../lib/date.js";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ export default function Settings() {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `daily-lift-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.href = url; a.download = `daily-lift-export-${localToday(user?.timezone)}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }

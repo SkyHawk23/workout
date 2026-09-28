@@ -1,29 +1,20 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { useStore } from "../store/useStore.js";
 import Btn from "../components/Btn.jsx";
 import Dialog from "../components/Dialog.jsx";
 import { kicker, fmtDate, totalSets } from "../lib/helpers.js";
+import { localToday, startOfWeek, addDays } from "../../lib/date.js";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function startOfWeek(iso) {
-  const d = new Date(iso + "T00:00:00Z");
-  const day = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
-  return d.toISOString().slice(0, 10);
-}
-function addDays(iso, n) {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
 
 const STATUS_BADGE = { planned: null, done: "badge-done", skipped: "badge-skipped" };
 
 export default function Program() {
   const navigate = useNavigate();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date().toISOString().slice(0, 10)));
+  const user = useStore((s) => s.user);
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(localToday(user?.timezone)));
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moving, setMoving] = useState(null); // session being rescheduled

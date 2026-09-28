@@ -5,21 +5,23 @@ import { str, int, arr, CHAT_MESSAGE_MAX, TRAINER_NOTES_MAX } from "./_validate.
 import { anthropic, TRAINER_MODEL, assertUnderTokenCap, recordTokenUsage } from "./_anthropic.js";
 import { resolveExerciseId } from "./_exercises.js";
 import { isLowerBody, expandProgramWeeks } from "./_progression.js";
+import { localToday, localDate, addDays, weekdayOf } from "../lib/date.js";
+import { moveSessionToToday } from "./_scheduling.js";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const CHAT_HISTORY_LIMIT = 20;
 const MAX_TOOL_ITERATIONS = 5;
 
-function nextTrainingDates(preferredDays, count, fromDate = new Date()) {
+// Starts from today (member timezone) — today counts if it's a preferred
+// training day, rather than always skipping ahead to tomorrow.
+export function nextTrainingDates(preferredDays, count, timezone) {
   const wanted = new Set((preferredDays || []).map((d) => WEEKDAYS.indexOf(d)).filter((i) => i >= 0));
   if (!wanted.size) return [];
   const dates = [];
-  const cursor = new Date(fromDate);
-  cursor.setUTCHours(0, 0, 0, 0);
-  cursor.setUTCDate(cursor.getUTCDate() + 1); // start from tomorrow
+  let cursor = localToday(timezone);
   while (dates.length < count) {
-    if (wanted.has(cursor.getUTCDay())) dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    if (wanted.has(weekdayOf(cursor))) dates.push(cursor);
+    cursor = addDays(cursor, 1);
   }
   return dates;
 }
@@ -42,17 +44,19 @@ function systemPrompt(user, profile) {
       ? "This member is under 18: keep programming technique-first with moderate loads. Never suggest a 1-rep max or any max-effort attempt. Encourage adult supervision during training."
       : "",
     "When the member asks you to change their program, use your tools rather than just describing the change in prose — the tools are how changes actually take effect.",
+    "If a tool result contains an \"error\" field, that action failed — tell the member plainly that it didn't work and why, and never say or imply the change went through.",
     "regenerate_program requires the member to confirm in the app before it runs; when you call it, tell them you've queued it and they need to confirm.",
   ].filter(Boolean).join("\n");
 }
 
-function profileBlock(profile, weekSummary, recentSessions, trainerNotes) {
+function profileBlock(profile, todayIso, weekSummary, recentSessions, trainerNotes) {
   return [
+    `Today's date: ${todayIso}`,
     `Goals: ${JSON.stringify(profile.goals || [])}`,
     `Experience: ${profile.experience || "unknown"}`,
     `Equipment: ${JSON.stringify(profile.equipment || {})}`,
     `Schedule: ${JSON.stringify(profile.schedule || {})}`,
-    `This week's planned sessions: ${JSON.stringify(weekSummary)}`,
+    `This week's planned sessions (each with its id — use it for tool calls like start_session_today): ${JSON.stringify(weekSummary)}`,
     `Last 5 completed sessions: ${JSON.stringify(recentSessions)}`,
     `Trainer notes (things you've learned about this member): ${trainerNotes || "(none yet)"}`,
   ].join("\n");
@@ -170,7 +174,7 @@ session_templates must contain exactly ${daysPerWeek} entries, one per training 
   }
 
   const expanded = expandProgramWeeks({ sessionTemplates, weeks, progression: generated.progression, exerciseMeta });
-  const dates = nextTrainingDates(profile.schedule?.preferred_days, expanded.length);
+  const dates = nextTrainingDates(profile.schedule?.preferred_days, expanded.length, user.timezone);
 
   await sql`update programs set status = 'archived' where user_id = ${user.id} and status = 'active'`;
   const [program] = await sql`
@@ -233,7 +237,7 @@ const QUICK_TOOL = {
   },
 };
 
-async function createQuickWorkoutCore(userId, { minutes, focus, equipment }) {
+async function createQuickWorkoutCore(userId, timezone, { minutes, focus, equipment }) {
   const prompt = `Build ONE one-off workout for ${minutes} minutes, focus: ${focus}, equipment: ${equipment || "whatever's on hand"}. Emit it with the emit_quick_workout tool. Weights in pounds, 0 for bodyweight.`;
   const response = await anthropic.messages.create({
     model: TRAINER_MODEL,
@@ -256,7 +260,7 @@ async function createQuickWorkoutCore(userId, { minutes, focus, equipment }) {
       sets: Array.from({ length: Math.max(1, ex.sets || 3) }, () => ({ reps_min: ex.reps_min || 8, reps_max: ex.reps_max || 12, weight, rpe_target: null })),
     });
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday(timezone);
   const [row] = await sql`
     insert into planned_sessions (program_id, user_id, date, title, note, exercises, status, kind)
     values (null, ${userId}, ${today}, ${generated.title || "Quick workout"}, ${`${equipment || "Bodyweight"}, built just now`}, ${JSON.stringify(resolvedExercises)}, 'planned', 'quick')
@@ -338,7 +342,8 @@ async function quickWorkout(req, res, body) {
   const minutes = int(body.minutes, { field: "minutes", min: 5, max: 180 });
   const focus = str(body.focus, { field: "focus" });
   const equipment = str(body.equipment, { field: "equipment", required: false });
-  const row = await createQuickWorkoutCore(session.id, { minutes, focus, equipment });
+  const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
+  const row = await createQuickWorkoutCore(session.id, timezone, { minutes, focus, equipment });
   return { session: row };
 }
 
@@ -349,39 +354,42 @@ const CHAT_TOOLS = [
   { name: "modify_session", description: "Replace the exercises in one planned session.", input_schema: { type: "object", properties: { session_id: { type: "string" }, exercises: { type: "array" }, reason: { type: "string" } }, required: ["session_id", "exercises", "reason"] } },
   { name: "swap_exercise", description: "Swap one exercise in a planned session for another.", input_schema: { type: "object", properties: { session_id: { type: "string" }, from: { type: "string" }, to: { type: "string" }, reason: { type: "string" } }, required: ["session_id", "from", "to", "reason"] } },
   { name: "reschedule", description: "Move a planned session to a different date.", input_schema: { type: "object", properties: { session_id: { type: "string" }, date: { type: "string" } }, required: ["session_id", "date"] } },
+  { name: "start_session_today", description: "Move a planned session to today so the member can do it right now.", input_schema: { type: "object", properties: { session_id: { type: "string" } }, required: ["session_id"] } },
   { name: "skip_session", description: "Mark a planned session as skipped.", input_schema: { type: "object", properties: { session_id: { type: "string" }, reason: { type: "string" } }, required: ["session_id", "reason"] } },
   { name: "update_profile", description: "Update fields on the member's trainer profile.", input_schema: { type: "object", properties: { fields: { type: "object" } }, required: ["fields"] } },
   { name: "regenerate_program", description: "Queue a full program regeneration. Requires the member to confirm in the app before it runs.", input_schema: { type: "object", properties: { reason: { type: "string" } }, required: ["reason"] } },
   { name: "create_quick_workout", description: "Create a one-off workout for today.", input_schema: { type: "object", properties: { minutes: { type: "integer" }, focus: { type: "string" } }, required: ["minutes", "focus"] } },
 ];
 
-async function runTool(session, name, input) {
+// sqlClient/timezone are injectable so this can be unit-tested without a
+// database (tests/trainer.test.js) — they default to the real client and UTC.
+export async function runTool(session, name, input, { sqlClient = sql, timezone = "UTC" } = {}) {
   switch (name) {
     case "get_history": {
       const days = Math.min(90, input.days || 30);
-      const rows = await sql`
+      const rows = await sqlClient`
         select started_at, ended_at from session_logs
         where user_id = ${session.id} and ended_at is not null
           and started_at > ${new Date(Date.now() - days * 86400000).toISOString()}
         order by started_at desc
       `;
-      return { result: { sessions: rows.length, dates: rows.map((r) => r.started_at.toISOString().slice(0, 10)) } };
+      return { result: { sessions: rows.length, dates: rows.map((r) => localDate(r.started_at, timezone)) } };
     }
     case "get_program": {
       const weeksAhead = Math.min(8, input.weeks_ahead || 2);
-      const rows = await sql`
+      const rows = await sqlClient`
         select id, date, title, status from planned_sessions
         where user_id = ${session.id} and status = 'planned'
-          and date <= ${new Date(Date.now() + weeksAhead * 7 * 86400000).toISOString().slice(0, 10)}
+          and date <= ${addDays(localToday(timezone), weeksAhead * 7)}
         order by date
       `;
       return { result: { sessions: rows } };
     }
     case "modify_session": {
-      const [row] = await sql`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
+      const [row] = await sqlClient`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
       if (!row) return { result: { error: "Session not found" } };
-      await sql`update planned_sessions set exercises = ${JSON.stringify(input.exercises)}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
-      const [change] = await sql`
+      await sqlClient`update planned_sessions set exercises = ${JSON.stringify(input.exercises)}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
+      const [change] = await sqlClient`
         insert into session_changes (planned_session_id, user_id, reason, before, after)
         values (${row.id}, ${session.id}, 'trainer_modify', ${JSON.stringify({ exercises: row.exercises })}, ${JSON.stringify({ exercises: input.exercises })})
         returning id
@@ -392,16 +400,16 @@ async function runTool(session, name, input) {
       };
     }
     case "swap_exercise": {
-      const [row] = await sql`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
+      const [row] = await sqlClient`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
       if (!row) return { result: { error: "Session not found" } };
-      const toExercise = await resolveExerciseId(sql, session.id, input.to);
+      const toExercise = await resolveExerciseId(sqlClient, session.id, input.to);
       const nextExercises = (row.exercises || []).map((e) =>
         e.name.toLowerCase() === input.from.toLowerCase()
           ? { ...e, exercise_id: toExercise.id, name: input.to, sets: (e.sets || []).map((s) => ({ ...s, weight: toExercise.is_bodyweight ? 0 : s.weight })) }
           : e
       );
-      await sql`update planned_sessions set exercises = ${JSON.stringify(nextExercises)}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
-      const [change] = await sql`
+      await sqlClient`update planned_sessions set exercises = ${JSON.stringify(nextExercises)}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
+      const [change] = await sqlClient`
         insert into session_changes (planned_session_id, user_id, reason, before, after)
         values (${row.id}, ${session.id}, 'trainer_swap', ${JSON.stringify({ exercises: row.exercises })}, ${JSON.stringify({ exercises: nextExercises })})
         returning id
@@ -412,10 +420,10 @@ async function runTool(session, name, input) {
       };
     }
     case "reschedule": {
-      const [row] = await sql`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
+      const [row] = await sqlClient`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
       if (!row) return { result: { error: "Session not found" } };
-      await sql`update planned_sessions set date = ${input.date}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
-      const [change] = await sql`
+      await sqlClient`update planned_sessions set date = ${input.date}, revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
+      const [change] = await sqlClient`
         insert into session_changes (planned_session_id, user_id, reason, before, after)
         values (${row.id}, ${session.id}, 'reschedule', ${JSON.stringify({ date: row.date })}, ${JSON.stringify({ date: input.date })})
         returning id
@@ -423,20 +431,29 @@ async function runTool(session, name, input) {
       return { result: { ok: true }, changeCard: { change_id: change.id, summary: `Trainer moved "${row.title}" to ${input.date}.` } };
     }
     case "skip_session": {
-      const [row] = await sql`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
+      const [row] = await sqlClient`select * from planned_sessions where id = ${input.session_id} and user_id = ${session.id}`;
       if (!row) return { result: { error: "Session not found" } };
-      await sql`update planned_sessions set status = 'skipped', revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
-      const [change] = await sql`
+      await sqlClient`update planned_sessions set status = 'skipped', revision = revision + 1, updated_at = now() where id = ${row.id} and user_id = ${session.id}`;
+      const [change] = await sqlClient`
         insert into session_changes (planned_session_id, user_id, reason, before, after)
         values (${row.id}, ${session.id}, 'skip', ${JSON.stringify({ status: row.status })}, ${JSON.stringify({ status: "skipped" })})
         returning id
       `;
       return { result: { ok: true }, changeCard: { change_id: change.id, summary: `Trainer skipped "${row.title}": ${input.reason}` } };
     }
+    case "start_session_today": {
+      const moved = await moveSessionToToday(sqlClient, session.id, input.session_id, timezone);
+      if (!moved) return { result: { error: "Session not found" } };
+      if (!moved.change) return { result: { ok: true, already_today: true } };
+      return {
+        result: { ok: true },
+        changeCard: { change_id: moved.change.id, summary: `Trainer moved "${moved.session.title}" to today.` },
+      };
+    }
     case "update_profile": {
-      const [existing] = await sql`select * from trainer_profiles where user_id = ${session.id}`;
+      const [existing] = await sqlClient`select * from trainer_profiles where user_id = ${session.id}`;
       const merged = { ...existing, ...input.fields };
-      await sql`
+      await sqlClient`
         update trainer_profiles set goals = ${JSON.stringify(merged.goals)}, experience = ${merged.experience},
           equipment = ${JSON.stringify(merged.equipment)}, schedule = ${JSON.stringify(merged.schedule)},
           limitations = ${merged.limitations}, updated_at = now()
@@ -447,7 +464,7 @@ async function runTool(session, name, input) {
     case "regenerate_program":
       return { result: { queued: true }, pendingConfirmation: { reason: input.reason } };
     case "create_quick_workout": {
-      const row = await createQuickWorkoutCore(session.id, { minutes: input.minutes, focus: input.focus });
+      const row = await createQuickWorkoutCore(session.id, timezone, { minutes: input.minutes, focus: input.focus });
       return { result: { session_id: row.id, title: row.title }, changeCard: { summary: `Trainer built a quick workout: "${row.title}".` } };
     }
     default:
@@ -463,10 +480,11 @@ async function chat(req, res, body) {
 
   const [user] = await sql`select * from users where id = ${session.id}`;
   const [profile] = await sql`select * from trainer_profiles where user_id = ${session.id}`;
+  const todayIso = localToday(user.timezone);
 
   const weekSummary = await sql`
-    select title, date, status from planned_sessions where user_id = ${session.id}
-      and date >= ${new Date().toISOString().slice(0, 10)}
+    select id, title, date, status from planned_sessions where user_id = ${session.id}
+      and date >= ${todayIso}
     order by date limit 14
   `;
   const recentSessions = await sql`
@@ -485,7 +503,7 @@ async function chat(req, res, body) {
 
   const system = [
     { type: "text", text: systemPrompt(user, profile), cache_control: { type: "ephemeral" } },
-    { type: "text", text: profileBlock(profile, weekSummary, recentSessions, profile.trainer_notes), cache_control: { type: "ephemeral" } },
+    { type: "text", text: profileBlock(profile, todayIso, weekSummary, recentSessions, profile.trainer_notes), cache_control: { type: "ephemeral" } },
   ];
 
   const changeCards = [];
@@ -508,7 +526,7 @@ async function chat(req, res, body) {
     messages.push({ role: "assistant", content: response.content });
     const toolResults = [];
     for (const call of toolUses) {
-      const { result, changeCard, pendingConfirmation: pc } = await runTool(session, call.name, call.input);
+      const { result, changeCard, pendingConfirmation: pc } = await runTool(session, call.name, call.input, { timezone: user.timezone });
       if (changeCard) changeCards.push(changeCard);
       if (pc) pendingConfirmation = pc;
       toolResults.push({ type: "tool_result", tool_use_id: call.id, content: JSON.stringify(result) });

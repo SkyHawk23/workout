@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { useStore } from "../store/useStore.js";
 import Btn from "../components/Btn.jsx";
 import { kicker, totalSets, listNames } from "../lib/helpers.js";
+import { localToday, weekdayOf } from "../../lib/date.js";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function Today() {
   const navigate = useNavigate();
+  const user = useStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [trainerNote, setTrainerNote] = useState("");
   const [error, setError] = useState("");
+  const [startingToday, setStartingToday] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,11 +33,23 @@ export default function Today() {
   if (loading) return <div style={{ padding: "28px 20px 0", color: "var(--color-neutral-700)" }}>Loading…</div>;
   if (error) return <div style={{ padding: "28px 20px 0", color: "var(--color-accent-2-700)" }}>{error}</div>;
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localToday(user?.timezone);
   const planned = sessions.filter((s) => s.kind === "program" && s.status === "planned");
   const quick = sessions.filter((s) => s.kind === "quick" && s.status === "planned" && s.date === todayIso);
   const todaySession = planned.find((s) => s.date === todayIso);
   const nextUpcoming = planned.filter((s) => s.date > todayIso).sort((a, b) => a.date.localeCompare(b.date))[0];
+
+  async function trainNowAnyway() {
+    if (!nextUpcoming) return;
+    setStartingToday(true);
+    try {
+      await api("program", "start-today", { id: nextUpcoming.id });
+      navigate(`/run/${nextUpcoming.id}`);
+    } catch (err) {
+      setError(err.message || "Couldn't start that session");
+      setStartingToday(false);
+    }
+  }
 
   return (
     <div>
@@ -45,9 +61,14 @@ export default function Today() {
             <div style={{ ...kicker("var(--color-accent-700)"), marginBottom: 8 }}>Today</div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26, lineHeight: 1.1, letterSpacing: "-0.4px" }}>Rest day.</div>
             {nextUpcoming && (
-              <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>
-                Next up: {WEEKDAYS[new Date(nextUpcoming.date + "T12:00:00").getUTCDay()]} — {nextUpcoming.title}.
-              </div>
+              <>
+                <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>
+                  Next up: {WEEKDAYS[weekdayOf(nextUpcoming.date)]} — {nextUpcoming.title}.
+                </div>
+                <Btn variant="ghost" style={{ minHeight: 44, marginTop: "var(--space-3)" }} disabled={startingToday} onClick={trainNowAnyway}>
+                  {startingToday ? "Starting…" : "Train now anyway"}
+                </Btn>
+              </>
             )}
             {!nextUpcoming && !quick.length && (
               <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>Nothing planned yet. Ask your Trainer to build a program.</div>

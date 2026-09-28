@@ -2,19 +2,8 @@ import { sql } from "./_db.js";
 import { withHandler } from "./_respond.js";
 import { requireUser, httpError } from "./_auth.js";
 import { str } from "./_validate.js";
-
-function startOfWeek(date) {
-  const d = new Date(date);
-  const day = d.getUTCDay(); // 0 = Sunday
-  const diff = day === 0 ? -6 : 1 - day; // ISO week starts Monday
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().slice(0, 10);
-}
-function addDays(iso, n) {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
+import { localToday, startOfWeek, addDays } from "../lib/date.js";
+import { moveSessionToToday } from "./_scheduling.js";
 
 async function activeProgram(userId) {
   const [program] = await sql`
@@ -26,7 +15,8 @@ async function activeProgram(userId) {
 async function current(req) {
   const session = requireUser(req);
   const program = await activeProgram(session.id);
-  const start = startOfWeek(new Date().toISOString().slice(0, 10));
+  const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
+  const start = startOfWeek(localToday(timezone));
   const end = addDays(start, 7);
 
   const sessions = program
@@ -95,6 +85,15 @@ async function reschedule(req, res, body) {
   return { session: updated };
 }
 
+async function startToday(req, res, body) {
+  const session = requireUser(req);
+  const id = str(body.id, { field: "id" });
+  const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
+  const result = await moveSessionToToday(sql, session.id, id, timezone);
+  if (!result) throw httpError(404, "Session not found", "not_found");
+  return { session: result.session };
+}
+
 async function undoChange(req, res, body) {
   const session = requireUser(req);
   const change_id = str(body.change_id, { field: "change_id" });
@@ -120,4 +119,5 @@ async function undoChange(req, res, body) {
 
 export default withHandler({
   current, week, session: getSession, skip, reschedule, "undo-change": undoChange,
+  "start-today": startToday,
 });

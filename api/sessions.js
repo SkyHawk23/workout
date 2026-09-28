@@ -3,6 +3,7 @@ import { withHandler } from "./_respond.js";
 import { requireUser, httpError } from "./_auth.js";
 import { str, int } from "./_validate.js";
 import { startSession, logSets, finishSession } from "./_sessions.js";
+import { localDate } from "../lib/date.js";
 
 async function count(req) {
   const session = requireUser(req);
@@ -35,6 +36,7 @@ async function history(req, res, body) {
   const limit = int(body.limit, { field: "limit", min: 1, max: 100, required: false }) ?? 30;
   const offset = int(body.offset, { field: "offset", min: 0, required: false }) ?? 0;
 
+  const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
   const rows = await sql`
     select sl.id, sl.started_at, sl.ended_at, sl.source,
       coalesce(ps.title, 'Workout') as name,
@@ -47,7 +49,7 @@ async function history(req, res, body) {
   `;
   return {
     sessions: rows.map((r) => ({
-      id: r.id, date: r.started_at.toISOString().slice(0, 10), name: r.name, sets: r.sets,
+      id: r.id, date: localDate(r.started_at, timezone), name: r.name, sets: r.sets,
       mins: r.ended_at ? Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) : null,
       source: r.source,
     })),

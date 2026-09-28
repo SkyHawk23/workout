@@ -3,7 +3,7 @@ import { api } from "../lib/api.js";
 import { clearUserCache } from "../lib/idb.js";
 
 export const useStore = create((set, get) => ({
-  user: null, // {id, email, display_name, role, household_id, birth_year}
+  user: null, // {id, email, display_name, role, household_id, birth_year, timezone}
   authChecked: false,
   prefs: { view: "exercise", rest: "manual", secs: 90 },
   sessionsLoggedCount: 0,
@@ -28,7 +28,8 @@ export const useStore = create((set, get) => ({
   },
 
   async login(email, password) {
-    const res = await api("auth", "login", { email, password });
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const res = await api("auth", "login", { email, password, timezone });
     const prevId = get().user?.id;
     if (prevId && prevId !== res.user.id) await clearUserCache();
     set({ user: res.user, prefs: res.user.prefs });
@@ -37,7 +38,8 @@ export const useStore = create((set, get) => ({
   },
 
   async signup(payload) {
-    const res = await api("auth", "signup", payload);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const res = await api("auth", "signup", { ...payload, timezone });
     set({ user: res.user, prefs: res.user.prefs, sessionsLoggedCount: 0 });
     return res.user;
   },

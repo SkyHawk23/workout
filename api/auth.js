@@ -11,6 +11,7 @@ function sanitizeUser(u) {
   return {
     id: u.id, email: u.email, display_name: u.display_name,
     role: u.role, household_id: u.household_id, birth_year: u.birth_year,
+    timezone: u.timezone || "UTC",
     prefs: u.prefs || { view: "exercise", rest: "manual", secs: 90 },
   };
 }
@@ -21,6 +22,7 @@ async function signup(req, res, body) {
   const display_name = str(body.display_name, { field: "display_name", min: 1, max: 80 });
   const birth_year = body.birth_year ? int(body.birth_year, { field: "birth_year", min: 1900, max: new Date().getFullYear() }) : null;
   const invite_code = body.invite_code ? str(body.invite_code, { field: "invite_code", required: false, max: 32 }) : null;
+  const timezone = body.timezone ? str(body.timezone, { field: "timezone", required: false, max: 100 }) : "UTC";
 
   const [existing] = await sql`select id from users where email = ${email}`;
   if (existing) throw httpError(409, "An account with that email already exists", "email_taken");
@@ -43,9 +45,9 @@ async function signup(req, res, body) {
 
   const password_hash = await hashPassword(password);
   const [user] = await sql`
-    insert into users (household_id, role, email, password_hash, display_name, birth_year)
-    values (${household_id}, ${role}, ${email}, ${password_hash}, ${display_name}, ${birth_year})
-    returning id, household_id, role, email, display_name, birth_year
+    insert into users (household_id, role, email, password_hash, display_name, birth_year, timezone)
+    values (${household_id}, ${role}, ${email}, ${password_hash}, ${display_name}, ${birth_year}, ${timezone})
+    returning id, household_id, role, email, display_name, birth_year, timezone
   `;
   await sql`insert into trainer_profiles (user_id) values (${user.id}) on conflict do nothing`;
   if (invite) await sql`update household_invites set used_by = ${user.id} where id = ${invite.id}`;
@@ -57,6 +59,7 @@ async function signup(req, res, body) {
 async function login(req, res, body) {
   const email = validateEmail(body.email);
   const password = str(body.password, { field: "password", min: 1, max: 200 });
+  const timezone = body.timezone ? str(body.timezone, { field: "timezone", required: false, max: 100 }) : null;
 
   const [user] = await sql`select * from users where email = ${email}`;
   if (!user) throw httpError(401, "Invalid email or password", "invalid_credentials");
@@ -68,6 +71,13 @@ async function login(req, res, body) {
     throw httpError(401, "Invalid email or password", "invalid_credentials");
   }
   await resetLoginAttempts(sql, user.id);
+
+  // Keep the member's timezone current — it's what "today" and week
+  // boundaries are computed in, and a device/location can change.
+  if (timezone && timezone !== user.timezone) {
+    await sql`update users set timezone = ${timezone} where id = ${user.id}`;
+    user.timezone = timezone;
+  }
 
   setAuthCookie(res, signToken(user));
   return { user: sanitizeUser(user) };
