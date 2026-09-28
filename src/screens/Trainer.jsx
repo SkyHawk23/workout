@@ -103,7 +103,7 @@ function Chat() {
       {error && <div style={{ fontSize: 14, color: "var(--color-accent-2-700)", marginTop: "var(--space-3)" }}>{error}</div>}
 
       <form onSubmit={send} style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
-        <input className="input" placeholder="Ask your trainer…" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} />
+        <input className="input" placeholder="Ask your trainer…" autoComplete="off" value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} />
         <Btn type="submit" disabled={busy || !message.trim()} style={{ minHeight: 40, padding: "0 18px", whiteSpace: "nowrap" }}>Send</Btn>
       </form>
     </div>

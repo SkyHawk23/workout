@@ -111,7 +111,7 @@ export default function Program() {
         >
           <div className="field">
             <label>New date</label>
-            <input className="input" type="date" value={moveDate} onChange={(e) => setMoveDate(e.target.value)} />
+            <input className="input" type="date" autoComplete="off" value={moveDate} onChange={(e) => setMoveDate(e.target.value)} />
           </div>
         </Dialog>
       )}

@@ -118,7 +118,7 @@ export default function Settings() {
         <Seg name="wrest" value={prefs.rest} onChange={(v) => setPrefs({ rest: v })} options={[{ value: "auto", label: "Auto" }, { value: "manual", label: "Manual timer" }]} />
         <div className="field" style={{ marginTop: "var(--space-4)" }}>
           <label>Default rest length (seconds)</label>
-          <input className="input" type="number" inputMode="numeric" value={prefs.secs} onChange={(e) => { const v = parseInt(e.target.value, 10); setPrefs({ secs: isNaN(v) ? 90 : v }); }} />
+          <input className="input" type="number" inputMode="numeric" autoComplete="off" value={prefs.secs} onChange={(e) => { const v = parseInt(e.target.value, 10); setPrefs({ secs: isNaN(v) ? 90 : v }); }} />
         </div>
       </div>
 

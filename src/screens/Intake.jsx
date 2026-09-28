@@ -23,8 +23,13 @@ const STEP_COUNT = 7;
 export default function Intake() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [busy, setBusy] = useState(false);
+  // "form" (answering questions) | "building" (waiting on generation) | "error"
+  const [phase, setPhase] = useState("form");
   const [error, setError] = useState("");
+  // Once the first attempt has called trainer.intake, the profile is saved
+  // server-side even if generation itself then fails — so a retry only
+  // needs to re-run generation, not resubmit the whole form.
+  const [profileSaved, setProfileSaved] = useState(false);
   const [form, setForm] = useState({
     goals: [], goalsOther: "",
     experience: "some",
@@ -40,7 +45,7 @@ export default function Intake() {
   }
 
   async function finish() {
-    setBusy(true);
+    setPhase("building");
     setError("");
     try {
       const goals = [...form.goals, ...(form.goalsOther.trim() ? [form.goalsOther.trim()] : [])];
@@ -51,6 +56,9 @@ export default function Intake() {
         ? Object.fromEntries(Object.entries(form.working_weights).filter(([, v]) => v))
         : {};
 
+      // The server saves the trainer profile before it attempts generation,
+      // so from this point on a failure still leaves it saved.
+      setProfileSaved(true);
       await api("trainer", "intake", {
         goals,
         experience: form.experience,
@@ -63,9 +71,61 @@ export default function Intake() {
       navigate("/today", { replace: true });
     } catch (err) {
       setError(err.message || "Couldn't build your program. Try again.");
-    } finally {
-      setBusy(false);
+      setPhase("error");
     }
+  }
+
+  async function retry() {
+    setPhase("building");
+    setError("");
+    try {
+      // Profile is already saved — just ask the trainer to generate again.
+      await api("trainer", "generate-program", {});
+      navigate("/today", { replace: true });
+    } catch (err) {
+      setError(err.message || "Couldn't build your program. Try again.");
+      setPhase("error");
+    }
+  }
+
+  if (phase === "building") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", background: "var(--color-neutral-300)" }}>
+        <div style={{ width: "100%", maxWidth: 430, minHeight: "100vh", background: "var(--color-bg)", padding: "60px 20px 0" }}>
+          <div style={kicker("var(--color-accent-700)")}>Building</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 30, lineHeight: 1.15, letterSpacing: "-0.4px", marginTop: 10 }}>
+            Building your program…
+          </div>
+          <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 12, lineHeight: 1.5 }}>
+            Your trainer is putting together a multi-week program from your answers. This can take up to a minute.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", justifyContent: "center", background: "var(--color-neutral-300)" }}>
+        <div style={{ width: "100%", maxWidth: 430, minHeight: "100vh", background: "var(--color-bg)", padding: "60px 20px 0" }}>
+          <div style={kicker("var(--color-accent-2-700)")}>Couldn't build it</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26, lineHeight: 1.15, letterSpacing: "-0.4px", marginTop: 10 }}>
+            {error || "Something went wrong."}
+          </div>
+          <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 12, lineHeight: 1.5 }}>
+            {profileSaved ? "Your answers are saved — just try again." : "Your answers are still here — try again."}
+          </div>
+          <Btn style={{ width: "100%", minHeight: 52, fontSize: 17, marginTop: "var(--space-6)" }} onClick={profileSaved ? retry : finish}>
+            Try again
+          </Btn>
+          {profileSaved && (
+            <Btn variant="ghost" style={{ width: "100%", minHeight: 44, marginTop: "var(--space-2)" }} onClick={() => setPhase("form")}>
+              Review my answers
+            </Btn>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const canAdvance = [
@@ -208,7 +268,7 @@ export default function Intake() {
           {step < STEP_COUNT - 1 ? (
             <Btn style={{ flex: 1, minHeight: 52, fontSize: 17 }} disabled={!canAdvance} onClick={() => setStep((s) => s + 1)}>Next</Btn>
           ) : (
-            <Btn style={{ flex: 1, minHeight: 52, fontSize: 17 }} disabled={busy} onClick={finish}>{busy ? "Building your program…" : "Build my program"}</Btn>
+            <Btn style={{ flex: 1, minHeight: 52, fontSize: 17 }} onClick={finish}>Build my program</Btn>
           )}
         </div>
       </div>

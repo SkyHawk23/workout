@@ -4,6 +4,7 @@ import { requireUser, httpError } from "./_auth.js";
 import { str, int, arr, CHAT_MESSAGE_MAX, TRAINER_NOTES_MAX } from "./_validate.js";
 import { anthropic, TRAINER_MODEL, assertUnderTokenCap, recordTokenUsage } from "./_anthropic.js";
 import { resolveExerciseId } from "./_exercises.js";
+import { isLowerBody, expandProgramWeeks } from "./_progression.js";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const CHAT_HISTORY_LIMIT = 20;
@@ -59,23 +60,35 @@ function profileBlock(profile, weekSummary, recentSessions, trainerNotes) {
 
 // ── Program generation (shared by intake, generate-program, and the
 // regenerate_program chat tool once the member confirms it) ─────────────
+// Claude returns a compact weekly template plus a flat progression rate —
+// not a full weeks x days listing (that was slow to generate at 4-8 weeks
+// and prone to truncation). The server expands it (see
+// expandProgramWeeks in _progression.js) into the full calendar.
 const PROGRAM_TOOL = {
   name: "emit_program",
-  description: "Emit the generated multi-week workout program as structured data.",
+  description: "Emit one week's worth of session templates plus a weekly progression rate. The server repeats the templates across every week of the program, applying the progression.",
   input_schema: {
     type: "object",
-    required: ["name", "weeks", "sessions"],
+    required: ["name", "weeks", "progression", "session_templates"],
     properties: {
       name: { type: "string" },
       weeks: { type: "integer", minimum: 4, maximum: 8 },
-      sessions: {
+      progression: {
+        type: "object",
+        required: ["upper_lb_per_week", "lower_lb_per_week", "deload_pct"],
+        properties: {
+          upper_lb_per_week: { type: "number", description: "Weekly weight increase in pounds for non-leg exercises." },
+          lower_lb_per_week: { type: "number", description: "Weekly weight increase in pounds for leg exercises." },
+          deload_pct: { type: "number", description: "Fraction from 0 to 1 applied to the final week's weight, e.g. 0.6 to cut it by 40%." },
+        },
+      },
+      session_templates: {
         type: "array",
-        description: "Flat list of every session across every week, in chronological order (week 1 first session, week 1 second session, ... week N last session).",
+        description: "Exactly one template per training day in a single week — the server repeats this pattern for every week of the program.",
         items: {
           type: "object",
-          required: ["week", "title", "note", "exercises"],
+          required: ["title", "note", "exercises"],
           properties: {
-            week: { type: "integer" },
             title: { type: "string" },
             note: { type: "string" },
             exercises: {
@@ -88,7 +101,7 @@ const PROGRAM_TOOL = {
                   sets: { type: "integer" },
                   reps_min: { type: "integer" },
                   reps_max: { type: "integer" },
-                  weight: { type: "integer", description: "Starting working weight in pounds, 0 for bodyweight." },
+                  weight: { type: "integer", description: "Week 1 starting working weight in pounds, 0 for bodyweight." },
                   rest_s: { type: "integer" },
                   cue: { type: "string", description: "One short, terse coaching cue." },
                 },
@@ -113,33 +126,51 @@ async function generateProgramCore(user, profile) {
     for (const row of rows) workingWeightsByName[row.name] = profile.working_weights[row.id].weight;
   }
 
-  const prompt = `Build a multi-week (4-8 week) strength program for this member.
+  const prompt = `Build a multi-week (4-8 week) strength program for this member as a repeating weekly template plus a progression rate — not a full week-by-week listing.
 Goals: ${JSON.stringify(profile.goals)}
 Experience: ${profile.experience}
 Equipment available: ${JSON.stringify(profile.equipment)}
 Days per week: ${daysPerWeek}, session length: ${profile.schedule?.session_minutes} minutes
 ${profile.limitations ? `Limitations: ${profile.limitations}` : "No limitations reported."}
-${hasKnownWeights ? `Known current working weights (lb): ${JSON.stringify(workingWeightsByName)}` : "The member does not know their working weights — use conservative, achievable starting loads (or 0 for bodyweight moves) since week 1 is a calibration week."}
+${hasKnownWeights ? `Known current working weights (lb): ${JSON.stringify(workingWeightsByName)}` : "The member does not know their working weights — use conservative, achievable starting loads (or 0 for bodyweight moves) as the week-1 baseline; the server treats week 1 as a calibration week."}
 ${age !== null && age < 18 ? "This member is under 18 — technique-first, moderate loads, no 1RM or max-effort testing." : ""}
 
-Make the final week of the program a deload week (reduce volume or intensity). Emit the program using the emit_program tool — the sessions array must contain exactly weeks * ${daysPerWeek} entries, in chronological order.`;
+session_templates must contain exactly ${daysPerWeek} entries, one per training day. Each exercise's "weight" is its week-1 starting weight only — the server applies progression.upper_lb_per_week / lower_lb_per_week every week after that and progression.deload_pct to the final week, so don't build the ramp or the deload into the templates yourself.`;
 
   const response = await anthropic.messages.create({
     model: TRAINER_MODEL,
-    max_tokens: 4000,
+    max_tokens: 8000,
     system: "You are a strength and conditioning coach designing a structured training program. Weights are always in pounds.",
     tools: [PROGRAM_TOOL],
     tool_choice: { type: "tool", name: "emit_program" },
     messages: [{ role: "user", content: prompt }],
   });
 
+  if (response.stop_reason === "max_tokens") {
+    throw httpError(502, "The trainer's response got cut off before finishing. Try again.", "trainer_error");
+  }
+
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse) throw httpError(502, "The trainer didn't return a program. Try again.", "trainer_error");
   const generated = toolUse.input;
 
   const weeks = Math.max(4, Math.min(8, generated.weeks || 4));
-  const dates = nextTrainingDates(profile.schedule?.preferred_days, weeks * daysPerWeek);
-  const sessions = (generated.sessions || []).slice(0, dates.length);
+  const sessionTemplates = (generated.session_templates || []).slice(0, daysPerWeek);
+  if (!sessionTemplates.length) throw httpError(502, "The trainer didn't return any session templates. Try again.", "trainer_error");
+
+  // Resolve every unique exercise once (not once per week) to get its id and
+  // body-region classification for the progression rate.
+  const uniqueNames = [...new Set(sessionTemplates.flatMap((t) => (t.exercises || []).map((e) => e.name)).filter(Boolean))];
+  const exerciseByName = {};
+  const exerciseMeta = {};
+  for (const name of uniqueNames) {
+    const exercise = await resolveExerciseId(sql, user.id, name);
+    exerciseByName[name] = exercise;
+    exerciseMeta[name.toLowerCase()] = { isLowerBody: isLowerBody(exercise.category) };
+  }
+
+  const expanded = expandProgramWeeks({ sessionTemplates, weeks, progression: generated.progression, exerciseMeta });
+  const dates = nextTrainingDates(profile.schedule?.preferred_days, expanded.length);
 
   await sql`update programs set status = 'archived' where user_id = ${user.id} and status = 'active'`;
   const [program] = await sql`
@@ -149,13 +180,12 @@ Make the final week of the program a deload week (reduce volume or intensity). E
   `;
 
   const createdSessions = [];
-  for (let i = 0; i < sessions.length; i++) {
-    const s = sessions[i];
-    const resolvedExercises = [];
-    for (const ex of s.exercises || []) {
-      const exercise = await resolveExerciseId(sql, user.id, ex.name);
+  for (let i = 0; i < expanded.length; i++) {
+    const s = expanded[i];
+    const resolvedExercises = (s.exercises || []).map((ex) => {
+      const exercise = exerciseByName[ex.name];
       const weight = exercise.is_bodyweight ? 0 : ex.weight ?? 0;
-      resolvedExercises.push({
+      return {
         exercise_id: exercise.id,
         name: ex.name,
         cue: ex.cue || "",
@@ -163,8 +193,8 @@ Make the final week of the program a deload week (reduce volume or intensity). E
         sets: Array.from({ length: Math.max(1, ex.sets || 3) }, () => ({
           reps_min: ex.reps_min || 8, reps_max: ex.reps_max || 10, weight, rpe_target: null,
         })),
-      });
-    }
+      };
+    });
     const isCalibration = s.week === 1 && !hasKnownWeights;
     const [row] = await sql`
       insert into planned_sessions (program_id, user_id, date, title, note, exercises, status, kind, is_calibration)

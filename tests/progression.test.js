@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   nextWeightOnSuccess, cutWeight, epleyWorkingWeight,
   evaluateExercisePerformance, applyMissLogic, isLowerBody,
+  weightForWeek, expandProgramWeeks,
 } from "../api/_progression.js";
 
 describe("isLowerBody", () => {
@@ -92,3 +93,91 @@ describe("applyMissLogic", () => {
 function cutWeightExpectation(w) {
   return Math.round((w * 0.9) / 5) * 5;
 }
+
+describe("weightForWeek", () => {
+  it("keeps week 1 at the baseline with no increase applied", () => {
+    expect(weightForWeek(135, 1, 6, 5, 0.6)).toBe(135);
+  });
+
+  it("adds one increment per week after week 1", () => {
+    expect(weightForWeek(135, 2, 6, 5, 0.6)).toBe(140);
+    expect(weightForWeek(135, 3, 6, 5, 0.6)).toBe(145);
+    expect(weightForWeek(135, 5, 6, 5, 0.6)).toBe(155);
+  });
+
+  it("applies deload_pct only on the final week, on top of that week's progressed weight", () => {
+    // week 6 of 6 would otherwise be 135 + 5*5 = 160; deload cuts it to 60%
+    expect(weightForWeek(135, 6, 6, 5, 0.6)).toBe(96);
+  });
+
+  it("never increases a bodyweight (0 lb) exercise", () => {
+    expect(weightForWeek(0, 4, 6, 5, 0.6)).toBe(0);
+  });
+
+  it("defaults deload_pct to a no-op (1) when omitted", () => {
+    expect(weightForWeek(100, 4, 4, 10)).toBe(130);
+  });
+
+  it("rounds to the nearest whole pound", () => {
+    expect(weightForWeek(100, 3, 5, 2.5)).toBe(105); // 100 + 2*2.5
+    expect(weightForWeek(100, 2, 5, 1.25)).toBe(101); // 101.25 -> 101
+  });
+});
+
+describe("expandProgramWeeks", () => {
+  const sessionTemplates = [
+    { title: "Upper A", note: "push/pull", exercises: [
+      { name: "Bench Press", sets: 3, reps_min: 6, reps_max: 8, weight: 135, rest_s: 90, cue: "drive" },
+      { name: "Push-up", sets: 3, reps_min: 8, reps_max: 12, weight: 0, rest_s: 60, cue: "straight line" },
+    ] },
+    { title: "Lower A", note: "squat focus", exercises: [
+      { name: "Squat", sets: 4, reps_min: 5, reps_max: 6, weight: 185, rest_s: 120, cue: "knees out" },
+    ] },
+  ];
+  const progression = { upper_lb_per_week: 5, lower_lb_per_week: 10, deload_pct: 0.6 };
+  const exerciseMeta = {
+    "bench press": { isLowerBody: false },
+    "push-up": { isLowerBody: false },
+    "squat": { isLowerBody: true },
+  };
+
+  it("produces exactly weeks * templates.length sessions, in week-major order", () => {
+    const result = expandProgramWeeks({ sessionTemplates, weeks: 4, progression, exerciseMeta });
+    expect(result).toHaveLength(8);
+    expect(result.map((s) => s.week)).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+    expect(result.map((s) => s.title)).toEqual(["Upper A", "Lower A", "Upper A", "Lower A", "Upper A", "Lower A", "Upper A", "Lower A"]);
+  });
+
+  it("applies the upper vs lower increment per exercise based on exerciseMeta", () => {
+    const result = expandProgramWeeks({ sessionTemplates, weeks: 3, progression, exerciseMeta });
+    const week2Upper = result.find((s) => s.week === 2 && s.title === "Upper A");
+    const week2Lower = result.find((s) => s.week === 2 && s.title === "Lower A");
+    expect(week2Upper.exercises.find((e) => e.name === "Bench Press").weight).toBe(140); // 135 + 5
+    expect(week2Lower.exercises.find((e) => e.name === "Squat").weight).toBe(195); // 185 + 10
+  });
+
+  it("keeps bodyweight exercises at 0 across every week", () => {
+    const result = expandProgramWeeks({ sessionTemplates, weeks: 3, progression, exerciseMeta });
+    for (const session of result) {
+      const pushup = session.exercises.find((e) => e.name === "Push-up");
+      if (pushup) expect(pushup.weight).toBe(0);
+    }
+  });
+
+  it("deloads only the final week", () => {
+    const result = expandProgramWeeks({ sessionTemplates, weeks: 4, progression, exerciseMeta });
+    const week3Upper = result.find((s) => s.week === 3 && s.title === "Upper A");
+    const week4Upper = result.find((s) => s.week === 4 && s.title === "Upper A");
+    expect(week3Upper.exercises.find((e) => e.name === "Bench Press").weight).toBe(145); // 135 + 2*5, no deload
+    expect(week4Upper.exercises.find((e) => e.name === "Bench Press").weight).toBe(90); // (135 + 3*5) * 0.6 = 90
+  });
+
+  it("falls back to isLowerBody: false (upper increment) for an exercise missing from exerciseMeta", () => {
+    const result = expandProgramWeeks({
+      sessionTemplates: [{ title: "X", note: "", exercises: [{ name: "Unknown Move", sets: 3, reps_min: 8, reps_max: 10, weight: 50, rest_s: 60, cue: "" }] }],
+      weeks: 3, progression, exerciseMeta: {}, // week 2 of 3, so this isn't also the deload week
+    });
+    const week2 = result.find((s) => s.week === 2);
+    expect(week2.exercises[0].weight).toBe(55); // 50 + upper increment (5), not lower (10)
+  });
+});

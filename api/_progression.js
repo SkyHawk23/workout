@@ -64,6 +64,43 @@ export function applyMissLogic(previousMissStreak, currentWeight) {
   return { missStreak: 0, weight: cutWeight(currentWeight), changed: true };
 }
 
+// ── Program generation expansion ─────────────────────────────────────────
+// Claude's emit_program tool returns one template per training day in a
+// week, plus a flat weekly progression rate — not a full weeks x days list
+// of sessions (that was slow to generate and prone to truncation at scale).
+// These pure functions expand that compact shape into the full calendar of
+// planned sessions server-side.
+
+// The weight for a given exercise in a given week: week 1 is always the
+// baseline (no increase yet — this is what makes an unspecified/calibration
+// week 1 correct with no special-casing), each week after adds
+// incrementPerWeek, and the final week gets deloadPct applied on top of
+// whatever weight the progression curve would otherwise have reached.
+export function weightForWeek(baseWeight, week, totalWeeks, incrementPerWeek, deloadPct = 1) {
+  if (!baseWeight) return 0; // bodyweight exercises stay at 0
+  const progressed = baseWeight + Math.max(0, week - 1) * (incrementPerWeek || 0);
+  const final = week === totalWeeks ? progressed * (deloadPct ?? 1) : progressed;
+  return Math.max(0, Math.round(final));
+}
+
+// exerciseMeta: {[lowercased exercise name]: {isLowerBody: boolean}} —
+// resolved once by the caller (a DB lookup), not by this pure function.
+export function expandProgramWeeks({ sessionTemplates, weeks, progression, exerciseMeta = {} }) {
+  const out = [];
+  for (let week = 1; week <= weeks; week++) {
+    for (const template of sessionTemplates || []) {
+      const exercises = (template.exercises || []).map((ex) => {
+        const meta = exerciseMeta[(ex.name || "").toLowerCase()] || {};
+        const incrementPerWeek = meta.isLowerBody ? progression?.lower_lb_per_week : progression?.upper_lb_per_week;
+        const weight = weightForWeek(ex.weight || 0, week, weeks, incrementPerWeek, progression?.deload_pct);
+        return { ...ex, weight };
+      });
+      out.push({ week, title: template.title, note: template.note, exercises });
+    }
+  }
+  return out;
+}
+
 // ── DB orchestration (called from api/sessions.js on finish) ────────────
 // `sql` is passed in explicitly (rather than imported at module scope) so
 // this file — and its pure functions above — can be unit-tested without a
