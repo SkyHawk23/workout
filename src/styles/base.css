@@ -1,0 +1,14 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; background: var(--color-neutral-300); }
+body { color: var(--color-text); font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+button, input, select, textarea { font-family: inherit; }
+a { color: var(--color-accent-700); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--color-neutral-200); }
+::-webkit-scrollbar-thumb { background: var(--color-neutral-500); border-radius: 2px; }
+
+.tabular { font-variant-numeric: tabular-nums; }
