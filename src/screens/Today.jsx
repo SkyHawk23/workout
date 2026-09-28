@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useStore } from "../store/useStore.js";
@@ -13,31 +13,51 @@ export default function Today() {
   const user = useStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
+  const [program, setProgram] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [trainerNote, setTrainerNote] = useState("");
   const [error, setError] = useState("");
   const [startingToday, setStartingToday] = useState(false);
+  const [building, setBuilding] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([api("program", "current"), api("trainer", "get-profile").catch(() => ({ profile: null }))])
+  const load = useCallback(() => {
+    setLoading(true);
+    return Promise.all([api("program", "current"), api("trainer", "get-profile").catch(() => ({ profile: null }))])
       .then(([programRes, profileRes]) => {
-        if (cancelled) return;
         setSessions(programRes.sessions || []);
+        setProgram(programRes.program);
+        setProfile(profileRes.profile);
         setTrainerNote(profileRes.profile?.trainer_notes?.split(/(?<=[.!?])\s/)[0] || "");
       })
-      .catch((err) => !cancelled && setError(err.message))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function buildProgram() {
+    setBuilding(true);
+    setError("");
+    try {
+      await api("trainer", "generate-program", {});
+      await load();
+    } catch (err) {
+      setError(err.message || "Couldn't build your program. Try again.");
+    } finally {
+      setBuilding(false);
+    }
+  }
+
   if (loading) return <div style={{ padding: "28px 20px 0", color: "var(--color-neutral-700)" }}>Loading…</div>;
-  if (error) return <div style={{ padding: "28px 20px 0", color: "var(--color-accent-2-700)" }}>{error}</div>;
 
   const todayIso = localToday(user?.timezone);
   const planned = sessions.filter((s) => s.kind === "program" && s.status === "planned");
   const quick = sessions.filter((s) => s.kind === "quick" && s.status === "planned" && s.date === todayIso);
   const todaySession = planned.find((s) => s.date === todayIso);
   const nextUpcoming = planned.filter((s) => s.date > todayIso).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const profileComplete = !!profile?.schedule?.days_per_week;
 
   async function trainNowAnyway() {
     if (!nextUpcoming) return;
@@ -56,6 +76,17 @@ export default function Today() {
       <div style={{ padding: "28px 20px 0" }}>
         {todaySession ? (
           <SessionCard title="Today" session={todaySession} onBegin={() => navigate(`/run/${todaySession.id}`)} onPreview={() => navigate(`/program/${todaySession.id}`)} />
+        ) : !program && profileComplete ? (
+          <div>
+            <div style={{ ...kicker("var(--color-accent-700)"), marginBottom: 8 }}>Today</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 26, lineHeight: 1.1, letterSpacing: "-0.4px" }}>Your program isn't built yet.</div>
+            <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>
+              Your intake answers are saved — build your program from them whenever you're ready.
+            </div>
+            <Btn style={{ width: "100%", minHeight: 52, fontSize: 17, marginTop: "var(--space-4)" }} disabled={building} onClick={buildProgram}>
+              {building ? "Building your program…" : "Build my program"}
+            </Btn>
+          </div>
         ) : (
           <div>
             <div style={{ ...kicker("var(--color-accent-700)"), marginBottom: 8 }}>Today</div>
@@ -76,6 +107,8 @@ export default function Today() {
           </div>
         )}
       </div>
+
+      {error && <div style={{ padding: "0 20px", marginTop: "var(--space-3)", fontSize: 14, color: "var(--color-accent-2-700)" }}>{error}</div>}
 
       {quick.map((s) => (
         <div key={s.id} style={{ padding: "0 20px", marginTop: "var(--space-6)" }}>

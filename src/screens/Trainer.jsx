@@ -3,6 +3,7 @@ import { api } from "../lib/api.js";
 import Btn from "../components/Btn.jsx";
 import Seg from "../components/Seg.jsx";
 import { kicker } from "../lib/helpers.js";
+import MarkdownLite from "../components/MarkdownLite.jsx";
 
 const FOCUS_OPTIONS = ["Full body", "Upper body", "Lower body", "Core"];
 const MINUTE_OPTIONS = ["20", "30", "45", "60"];
@@ -79,7 +80,7 @@ function Chat() {
             {item.reply == null ? (
               <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, fontStyle: "italic" }}>Thinking…</div>
             ) : (
-              <div style={{ fontSize: 15, marginTop: 8, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{item.reply}</div>
+              <div style={{ fontSize: 15, marginTop: 8, lineHeight: 1.6 }}><MarkdownLite text={item.reply} /></div>
             )}
             {item.changeCards?.map((card, j) => (
               <div key={j} style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--color-divider)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-3)" }}>

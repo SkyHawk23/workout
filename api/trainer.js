@@ -36,6 +36,7 @@ function systemPrompt(user, profile) {
   const youth = age !== null && age < 18;
   return [
     "You are the AI personal trainer for The Daily Lift, a family workout app. You are a supportive, direct strength coach who writes in short sentences.",
+    "You may use **bold**, *italics*, and short bullet or numbered lists — that's all the formatting the app renders. Don't use headers, links, code blocks, or tables.",
     "All weights are in pounds. Never use kilograms.",
     `Member: ${user.display_name}${age !== null ? `, age ${age}` : ""}.`,
     profile.limitations ? `Limitations/injuries to always respect: ${profile.limitations}` : "No reported limitations.",
@@ -45,6 +46,7 @@ function systemPrompt(user, profile) {
       : "",
     "When the member asks you to change their program, use your tools rather than just describing the change in prose — the tools are how changes actually take effect.",
     "If a tool result contains an \"error\" field, that action failed — tell the member plainly that it didn't work and why, and never say or imply the change went through.",
+    "Only ever refer to sessions listed in \"This week's planned sessions\" or \"Last 5 completed sessions\" below — never invent, assume, or describe a session that isn't there. If no sessions are listed, say so plainly (e.g. that no program has been built yet) instead of describing one.",
     "regenerate_program requires the member to confirm in the app before it runs; when you call it, tell them you've queued it and they need to confirm.",
   ].filter(Boolean).join("\n");
 }
@@ -56,7 +58,9 @@ function profileBlock(profile, todayIso, weekSummary, recentSessions, trainerNot
     `Experience: ${profile.experience || "unknown"}`,
     `Equipment: ${JSON.stringify(profile.equipment || {})}`,
     `Schedule: ${JSON.stringify(profile.schedule || {})}`,
-    `This week's planned sessions (each with its id — use it for tool calls like start_session_today): ${JSON.stringify(weekSummary)}`,
+    weekSummary.length
+      ? `This week's planned sessions (each with its id — use it for tool calls like start_session_today): ${JSON.stringify(weekSummary)}`
+      : "This week's planned sessions: none — no program has been built yet.",
     `Last 5 completed sessions: ${JSON.stringify(recentSessions)}`,
     `Trainer notes (things you've learned about this member): ${trainerNotes || "(none yet)"}`,
   ].join("\n");
@@ -539,7 +543,15 @@ async function chat(req, res, body) {
   await sql`insert into chat_messages (user_id, role, content) values (${session.id}, 'assistant', ${JSON.stringify(finalText)})`;
 
   if (finalText) {
-    const notesPrompt = `Given this exchange, is there anything new and durable worth remembering about this member (injuries, preferences, schedule changes)? Current notes: "${profile.trainer_notes || ""}". Member said: "${userMessage}". Reply with the FULL updated notes text (max ${TRAINER_NOTES_MAX} chars), or reply with exactly the current notes unchanged if nothing new.`;
+    const notesPrompt = `You maintain a short, durable memory of facts about this member for future sessions: physical limitations or injuries, standing preferences, equipment access, and schedule constraints — things that will still be true weeks from now.
+
+Never record one-off events, requests, or anything that already happened via a tool this turn. "Member asked to swap squats this week" or "regenerated the program" are NOT durable facts — they're transient events, not standing truths about the member. Only the underlying fact behind them might be (e.g. a knee injury is durable; a one-time request to work around it isn't).
+
+Current notes: "${profile.trainer_notes || ""}"
+Member said: "${userMessage}"
+Your reply: "${finalText}"
+
+If nothing new and durable was revealed, reply with EXACTLY the current notes, unchanged — do not add a record of this conversation happening. Otherwise reply with the FULL updated notes text (max ${TRAINER_NOTES_MAX} chars): durable facts only, no narration of what was discussed or done.`;
     try {
       const notesResp = await anthropic.messages.create({
         model: TRAINER_MODEL, max_tokens: 400,
