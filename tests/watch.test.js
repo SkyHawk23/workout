@@ -77,7 +77,9 @@ if (!dbAvailable) {
   neonConfig.fetchEndpoint = `http://127.0.0.1:${proxyServer.address().port}/sql`;
 
   const { sql } = await import("../api/_db.js");
-  const watchHandler = (await import("../api/watch.js")).default;
+  const watchModule = await import("../api/watch.js");
+  const watchHandler = watchModule.default;
+  const { truncateName } = watchModule;
 
   function makeRes() {
     return {
@@ -205,7 +207,33 @@ if (!dbAvailable) {
 
       const res = await call("today", { token });
       expect(res.body.s.t).toBe("Today Session");
-      expect(res.body.s.x).toEqual([{ e: exercise.id, n: exName.slice(0, 20), r: 90, s: [[8, 10, 95]] }]);
+      expect(res.body.s.x).toEqual([{ e: exercise.id, n: truncateName(exName), r: 90, s: [[8, 10, 95]] }]);
+    });
+
+    it("truncates a long exercise name at a word boundary with an ellipsis", () => {
+      const long = "Single Arm Dumbbell Romanian Deadlift Variation";
+      const truncated = truncateName(long);
+      expect(truncated.length).toBeLessThanOrEqual(29); // <=28 chars plus the ellipsis
+      expect(truncated.endsWith("…")).toBe(true);
+      expect(long.startsWith(truncated.slice(0, -1))).toBe(true); // cut lands on a real word boundary
+      expect(truncateName("Push-up")).toBe("Push-up"); // short names pass through unchanged
+    });
+
+    it("emits a timed set as [0,0,0,hold_s] instead of [reps_min,reps_max,weight]", async () => {
+      const user = await makeUser();
+      const { token } = await pairNewDevice(user.id);
+      const exName = `Watch Test Plank ${crypto.randomUUID()}`;
+      const [exercise] = await sql`
+        insert into exercises (name, category, equipment, is_bodyweight) values (${exName}, 'core', 'bodyweight', true) returning id
+      `;
+      await sql`
+        insert into planned_sessions (program_id, user_id, date, title, exercises, status, kind)
+        values (null, ${user.id}, ${localToday("UTC")}, 'Mobility Session', ${JSON.stringify([
+          { exercise_id: exercise.id, name: exName, rest_s: 30, sets: [{ reps_min: 1, reps_max: 1, weight: 0, hold_s: 30 }, { reps_min: 8, reps_max: 10, weight: 0 }] },
+        ])}, 'planned', 'quick')
+      `;
+      const res = await call("today", { token });
+      expect(res.body.s.x[0].s).toEqual([[0, 0, 0, 30], [8, 10, 0]]);
     });
 
     it("returns the next upcoming session on a rest day", async () => {

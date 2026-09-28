@@ -180,4 +180,19 @@ describe("expandProgramWeeks", () => {
     const week2 = result.find((s) => s.week === 2);
     expect(week2.exercises[0].weight).toBe(55); // 50 + upper increment (5), not lower (10)
   });
+
+  it("passes hold_s through unchanged for a timed hold, which never progresses in weight", () => {
+    const result = expandProgramWeeks({
+      sessionTemplates: [{ title: "Mobility", note: "", exercises: [
+        { name: "Plank", sets: 3, reps_min: 1, reps_max: 1, weight: 0, rest_s: 30, cue: "", hold_s: 30 },
+      ] },
+      ],
+      weeks: 4, progression, exerciseMeta: {},
+    });
+    for (const session of result) {
+      const plank = session.exercises.find((e) => e.name === "Plank");
+      expect(plank.hold_s).toBe(30);
+      expect(plank.weight).toBe(0); // bodyweight/timed — never picks up the weekly increment or deload
+    }
+  });
 });

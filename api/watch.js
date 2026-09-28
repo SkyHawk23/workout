@@ -129,6 +129,18 @@ async function requireDevice(req, res) {
   return { device, user };
 }
 
+const EXERCISE_NAME_MAX = 28;
+
+// Truncates at the last word boundary within maxLen, so a name never gets
+// cut mid-word on the watch's tiny screen. Exported for tests.
+export function truncateName(name, maxLen = EXERCISE_NAME_MAX) {
+  const value = name || "";
+  if (value.length <= maxLen) return value;
+  const cut = value.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut) + "…";
+}
+
 function compactSession(row) {
   return {
     id: row.id,
@@ -136,9 +148,11 @@ function compactSession(row) {
     cal: !!row.is_calibration,
     x: (row.exercises || []).map((ex) => ({
       e: ex.exercise_id,
-      n: (ex.name || "").slice(0, 20),
+      n: truncateName(ex.name),
       r: ex.rest_s || 60,
-      s: (ex.sets || []).map((s) => [s.reps_min, s.reps_max, s.weight || 0]),
+      // A timed set (a stretch, plank, or other hold) is [0,0,0,hold_s];
+      // a normal set is [reps_min,reps_max,weight_lb].
+      s: (ex.sets || []).map((s) => (s.hold_s ? [0, 0, 0, s.hold_s] : [s.reps_min, s.reps_max, s.weight || 0])),
     })),
   };
 }
