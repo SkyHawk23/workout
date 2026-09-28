@@ -47,11 +47,11 @@ export default function Signup() {
         </div>
 
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          <TextInput label="Your name" required value={form.display_name} onChange={(e) => set("display_name", e.target.value)} />
+          <TextInput label="Your name" autoComplete="name" required value={form.display_name} onChange={(e) => set("display_name", e.target.value)} />
           <TextInput label="Email" type="email" autoComplete="email" required value={form.email} onChange={(e) => set("email", e.target.value)} />
           <TextInput label="Password (at least 10 characters)" type="password" autoComplete="new-password" required minLength={10} value={form.password} onChange={(e) => set("password", e.target.value)} />
-          <TextInput label="Birth year" type="number" inputMode="numeric" value={form.birth_year} onChange={(e) => set("birth_year", e.target.value)} />
-          <TextInput label="Invite code (optional)" value={form.invite_code} onChange={(e) => set("invite_code", e.target.value.toUpperCase())} />
+          <TextInput label="Birth year" type="number" inputMode="numeric" autoComplete="bday-year" value={form.birth_year} onChange={(e) => set("birth_year", e.target.value)} />
+          <TextInput label="Invite code (optional)" autoComplete="off" value={form.invite_code} onChange={(e) => set("invite_code", e.target.value.toUpperCase())} />
           {error && <div style={{ fontSize: 14, color: "var(--color-accent-2-700)" }}>{error}</div>}
           <Btn type="submit" disabled={busy} style={{ width: "100%", minHeight: 52, fontSize: 17 }}>
             {busy ? "Creating account…" : "Create account"}

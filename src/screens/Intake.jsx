@@ -96,7 +96,7 @@ export default function Intake() {
                 ))}
               </div>
               <div style={{ marginTop: "var(--space-4)" }}>
-                <TextInput label="Something else? (optional)" value={form.goalsOther} onChange={(e) => setForm((f) => ({ ...f, goalsOther: e.target.value }))} />
+                <TextInput label="Something else? (optional)" autoComplete="off" value={form.goalsOther} onChange={(e) => setForm((f) => ({ ...f, goalsOther: e.target.value }))} />
               </div>
             </div>
           )}
@@ -125,7 +125,7 @@ export default function Intake() {
                   </div>
                   {form.homeItems.includes("Dumbbells") && (
                     <div style={{ marginTop: "var(--space-4)" }}>
-                      <TextInput label="Heaviest dumbbell you have (lb, optional)" type="number" inputMode="numeric" value={form.dumbbellMax} onChange={(e) => setForm((f) => ({ ...f, dumbbellMax: e.target.value }))} />
+                      <TextInput label="Heaviest dumbbell you have (lb, optional)" type="number" inputMode="numeric" autoComplete="off" value={form.dumbbellMax} onChange={(e) => setForm((f) => ({ ...f, dumbbellMax: e.target.value }))} />
                     </div>
                   )}
                 </>
@@ -166,7 +166,7 @@ export default function Intake() {
               <h1 style={h1}>Any injuries or limitations?</h1>
               <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>Optional — your trainer will always work around these.</div>
               <div style={{ marginTop: "var(--space-4)" }}>
-                <TextArea label="Injuries or limitations" rows={4} value={form.limitations} onChange={(e) => setForm((f) => ({ ...f, limitations: e.target.value }))} />
+                <TextArea label="Injuries or limitations" rows={4} autoComplete="off" value={form.limitations} onChange={(e) => setForm((f) => ({ ...f, limitations: e.target.value }))} />
               </div>
             </div>
           )}
@@ -176,7 +176,7 @@ export default function Intake() {
               <h1 style={h1}>What year were you born?</h1>
               <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 8, lineHeight: 1.5 }}>Younger lifters get technique-first, moderate-load programming.</div>
               <div style={{ marginTop: "var(--space-4)" }}>
-                <TextInput label="Birth year" type="number" inputMode="numeric" value={form.birth_year} onChange={(e) => setForm((f) => ({ ...f, birth_year: e.target.value }))} />
+                <TextInput label="Birth year" type="number" inputMode="numeric" autoComplete="bday-year" value={form.birth_year} onChange={(e) => setForm((f) => ({ ...f, birth_year: e.target.value }))} />
               </div>
             </div>
           )}
@@ -191,7 +191,7 @@ export default function Intake() {
               {form.knowsWeights && (
                 <div style={{ marginTop: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
                   {KNOWN_LIFTS.map((lift) => (
-                    <TextInput key={lift} label={`${lift} (lb)`} type="number" inputMode="numeric"
+                    <TextInput key={lift} label={`${lift} (lb)`} type="number" inputMode="numeric" autoComplete="off"
                       value={form.working_weights[lift] || ""}
                       onChange={(e) => setForm((f) => ({ ...f, working_weights: { ...f.working_weights, [lift]: e.target.value } }))} />
                   ))}

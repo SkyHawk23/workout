@@ -90,8 +90,8 @@ export default function Settings() {
         <div style={{ fontSize: 17, marginTop: 8 }}>{user?.display_name}</div>
         <div style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>{user?.email}</div>
         <form onSubmit={changePassword} style={{ marginTop: "var(--space-3)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-          <TextInput label="Current password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-          <TextInput label="New password" type="password" minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <TextInput label="Current password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <TextInput label="New password" type="password" autoComplete="new-password" minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           {passwordNote && <div style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>{passwordNote}</div>}
           <Btn variant="secondary" type="submit" style={{ minHeight: 40 }}>Change password</Btn>
         </form>
@@ -101,7 +101,7 @@ export default function Settings() {
       <div style={{ marginTop: "var(--space-8)" }}>
         <div style={kicker("var(--color-neutral-700)")}>Trainer profile</div>
         <div style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5 }}>Injuries or limitations your trainer should always respect.</div>
-        <textarea className="input" rows={3} value={limitations} onChange={(e) => setLimitations(e.target.value)} />
+        <textarea className="input" rows={3} autoComplete="off" value={limitations} onChange={(e) => setLimitations(e.target.value)} />
         {profileNote && <div style={{ fontSize: 13, color: "var(--color-neutral-700)", marginTop: 6 }}>{profileNote}</div>}
         <Btn variant="secondary" style={{ minHeight: 40, marginTop: "var(--space-2)" }} onClick={saveLimitations}>Save</Btn>
       </div>
