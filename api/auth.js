@@ -120,8 +120,58 @@ async function updatePrefs(req, res, body) {
   return { prefs };
 }
 
+// ── Devices (Garmin watch pairing) ───────────────────────────────────────
+// The watch's own actions (pair-start, pair-poll, today, start, log,
+// finish) live in api/watch.js under bearer-token auth. These are the
+// website-side half: claiming a pairing code and managing already-paired
+// devices, all under the normal cookie session.
+async function devicesList(req) {
+  const session = requireUser(req);
+  const devices = await sql`
+    select id, name, paired_at, last_seen_at from devices
+    where user_id = ${session.id} and token_hash is not null and revoked_at is null
+    order by paired_at desc
+  `;
+  return { devices };
+}
+
+async function devicesConfirm(req, res, body) {
+  const session = requireUser(req);
+  const code = str(body.code, { field: "code", min: 6, max: 6 }).toUpperCase();
+  const [row] = await sql`
+    select id from devices where pair_code = ${code} and user_id is null and pair_expires_at > now()
+  `;
+  if (!row) throw httpError(400, "That code is invalid or has expired", "invalid_code");
+  await sql`update devices set user_id = ${session.id} where id = ${row.id}`;
+  return { ok: true };
+}
+
+async function devicesRename(req, res, body) {
+  const session = requireUser(req);
+  const id = str(body.id, { field: "id" });
+  const name = str(body.name, { field: "name", min: 1, max: 60 });
+  const [row] = await sql`update devices set name = ${name} where id = ${id} and user_id = ${session.id} returning id`;
+  if (!row) throw httpError(404, "Device not found", "not_found");
+  return { ok: true };
+}
+
+async function devicesRevoke(req, res, body) {
+  const session = requireUser(req);
+  const id = str(body.id, { field: "id" });
+  const [row] = await sql`
+    update devices set revoked_at = now(), token_hash = null
+    where id = ${id} and user_id = ${session.id} returning id
+  `;
+  if (!row) throw httpError(404, "Device not found", "not_found");
+  return { ok: true };
+}
+
 export default withHandler({
   signup, login, logout, me,
   "change-password": changePassword,
   "update-prefs": updatePrefs,
+  "devices-list": devicesList,
+  "devices-confirm": devicesConfirm,
+  "devices-rename": devicesRename,
+  "devices-revoke": devicesRevoke,
 });

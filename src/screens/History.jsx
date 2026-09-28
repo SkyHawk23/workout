@@ -40,7 +40,9 @@ export default function History() {
           <div key={h.id} style={{ padding: "4px 0", borderBottom: "1px solid var(--color-divider)" }}>
             <div onClick={() => toggle(h)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--space-2)", padding: "14px 0", cursor: "pointer", minHeight: 44 }}>
               <div>
-                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18 }}>{h.name}</div>
+                <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18 }}>
+                  {h.name} {h.source === "watch" && <span style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>⌚ Watch</span>}
+                </div>
                 <div style={{ fontSize: 13, color: "var(--color-neutral-700)", marginTop: 3 }}>{h.sets} sets{h.mins ? ` · ${h.mins} min` : ""}</div>
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-2)", flex: "none" }}>

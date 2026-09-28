@@ -30,7 +30,9 @@ export default function Run() {
   const [pendingRpe, setPendingRpe] = useState(null); // {exIndex, setIndex} awaiting an RPE answer (calibration only)
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState("");
+  const [holdLeft, setHoldLeft] = useState(null); // seconds left on a timed set's countdown, or null when the current set isn't timed
   const restSecsRef = useRef(90);
+  const restShownRef = useRef(false); // so the 1s interval (registered once) can read the latest restShown without a stale closure
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +57,7 @@ export default function Run() {
   }, [sessionId]);
 
   useEffect(() => { restSecsRef.current = prefs.secs; }, [prefs.secs]);
+  useEffect(() => { restShownRef.current = restShown; }, [restShown]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -67,9 +70,26 @@ export default function Run() {
         });
         return on;
       });
+      setHoldLeft((left) => (left === null || left <= 0 || restShownRef.current ? left : left - 1));
     }, 1000);
     return () => clearInterval(t);
   }, []);
+
+  // A timed set's countdown auto-starts the moment it becomes current, and
+  // resets whenever the current set changes (a new set, a new exercise, or
+  // an un-mark via tick()).
+  useEffect(() => {
+    const currentEx = exercises[exIndex];
+    const count = done[exIndex] || 0;
+    const cs = currentEx?.sets?.[Math.min(count, (currentEx?.sets.length || 1) - 1)];
+    setHoldLeft(cs?.hold_s || null);
+  }, [exercises, exIndex, done]);
+
+  // Auto-completes a timed set the moment its countdown reaches zero —
+  // completeSet() is a hoisted function declaration, defined below.
+  useEffect(() => {
+    if (holdLeft === 0) completeSet();
+  }, [holdLeft]);
 
   if (error) return <div style={{ padding: "22px 20px 0", color: "var(--color-accent-2-700)" }}>{error}</div>;
   if (!session || !sessionLogId) return <div style={{ padding: "22px 20px 0", color: "var(--color-neutral-700)" }}>Loading…</div>;
@@ -208,27 +228,35 @@ export default function Run() {
 
       <div style={{ marginTop: "var(--space-6)", paddingTop: "var(--space-4)", borderTop: "1px solid var(--color-divider)" }}>
         <div style={kicker("var(--color-accent-700)")}>{setLabel}</div>
-        <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 40, lineHeight: 1, letterSpacing: "-1px", marginTop: 10 }}>{setTarget(currentSet)}</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4) var(--space-6)", marginTop: "var(--space-4)" }}>
-          {hasWeight && (
+        {currentSet.hold_s ? (
+          <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 52, lineHeight: 1, letterSpacing: "-1px", marginTop: 10 }}>
+            {String(Math.floor((holdLeft ?? currentSet.hold_s) / 60)).padStart(1, "0")}:{String((holdLeft ?? currentSet.hold_s) % 60).padStart(2, "0")}
+          </div>
+        ) : (
+          <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 40, lineHeight: 1, letterSpacing: "-1px", marginTop: 10 }}>{setTarget(currentSet)}</div>
+        )}
+        {!currentSet.hold_s && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-4) var(--space-6)", marginTop: "var(--space-4)" }}>
+            {hasWeight && (
+              <div>
+                <div style={kicker("var(--color-neutral-700)")}>Adjust weight</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 8 }}>
+                  <Btn variant="secondary" aria-label="Lower weight" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpWeight(-5)}>&minus;</Btn>
+                  <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center" }}>{currentSet.weight} lb</div>
+                  <Btn variant="secondary" aria-label="Raise weight" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpWeight(5)}>+</Btn>
+                </div>
+              </div>
+            )}
             <div>
-              <div style={kicker("var(--color-neutral-700)")}>Adjust weight</div>
+              <div style={kicker("var(--color-neutral-700)")}>Adjust reps</div>
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 8 }}>
-                <Btn variant="secondary" aria-label="Lower weight" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpWeight(-5)}>&minus;</Btn>
-                <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center" }}>{currentSet.weight} lb</div>
-                <Btn variant="secondary" aria-label="Raise weight" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpWeight(5)}>+</Btn>
+                <Btn variant="secondary" aria-label="Lower reps" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpReps(-1)}>&minus;</Btn>
+                <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center" }}>{currentSet.reps_max} reps</div>
+                <Btn variant="secondary" aria-label="Raise reps" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpReps(1)}>+</Btn>
               </div>
             </div>
-          )}
-          <div>
-            <div style={kicker("var(--color-neutral-700)")}>Adjust reps</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginTop: 8 }}>
-              <Btn variant="secondary" aria-label="Lower reps" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpReps(-1)}>&minus;</Btn>
-              <div className="tabular" style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 18, minWidth: 62, textAlign: "center" }}>{currentSet.reps_max} reps</div>
-              <Btn variant="secondary" aria-label="Raise reps" style={{ minHeight: 46, width: 46, padding: 0, fontSize: 20 }} onClick={() => bumpReps(1)}>+</Btn>
-            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-6)" }}>

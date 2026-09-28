@@ -112,6 +112,7 @@ const PROGRAM_TOOL = {
                   weight: { type: "integer", description: "Week 1 starting working weight in pounds, 0 for bodyweight." },
                   rest_s: { type: "integer" },
                   cue: { type: "string", description: "One short, terse coaching cue." },
+                  hold_s: { type: "integer", description: "For a timed hold only (a stretch, plank, or other static hold): the hold duration in seconds. Omit for every ordinary rep-based exercise." },
                 },
               },
             },
@@ -143,7 +144,8 @@ ${profile.limitations ? `Limitations: ${profile.limitations}` : "No limitations 
 ${hasKnownWeights ? `Known current working weights (lb): ${JSON.stringify(workingWeightsByName)}` : "The member does not know their working weights — use conservative, achievable starting loads (or 0 for bodyweight moves) as the week-1 baseline; the server treats week 1 as a calibration week."}
 ${age !== null && age < 18 ? "This member is under 18 — technique-first, moderate loads, no 1RM or max-effort testing." : ""}
 
-session_templates must contain exactly ${daysPerWeek} entries, one per training day. Each exercise's "weight" is its week-1 starting weight only — the server applies progression.upper_lb_per_week / lower_lb_per_week every week after that and progression.deload_pct to the final week, so don't build the ramp or the deload into the templates yourself.`;
+session_templates must contain exactly ${daysPerWeek} entries, one per training day. Each exercise's "weight" is its week-1 starting weight only — the server applies progression.upper_lb_per_week / lower_lb_per_week every week after that and progression.deload_pct to the final week, so don't build the ramp or the deload into the templates yourself.
+For a stretch, plank, or other static hold, set hold_s to the hold duration in seconds instead of relying on reps — leave reps_min/reps_max as a low placeholder (e.g. 1) and weight at 0. Omit hold_s for every ordinary rep-based exercise.`;
 
   const response = await anthropic.messages.create({
     model: TRAINER_MODEL,
@@ -200,6 +202,7 @@ session_templates must contain exactly ${daysPerWeek} entries, one per training 
         rest_s: ex.rest_s || 90,
         sets: Array.from({ length: Math.max(1, ex.sets || 3) }, () => ({
           reps_min: ex.reps_min || 8, reps_max: ex.reps_max || 10, weight, rpe_target: null,
+          hold_s: ex.hold_s || null,
         })),
       };
     });
@@ -234,6 +237,7 @@ const QUICK_TOOL = {
             name: { type: "string" }, sets: { type: "integer" },
             reps_min: { type: "integer" }, reps_max: { type: "integer" },
             weight: { type: "integer" }, rest_s: { type: "integer" }, cue: { type: "string" },
+            hold_s: { type: "integer", description: "For a timed hold only (a stretch, plank, or other static hold): the hold duration in seconds. Omit for every ordinary rep-based exercise." },
           },
         },
       },
@@ -242,7 +246,7 @@ const QUICK_TOOL = {
 };
 
 async function createQuickWorkoutCore(userId, timezone, { minutes, focus, equipment }) {
-  const prompt = `Build ONE one-off workout for ${minutes} minutes, focus: ${focus}, equipment: ${equipment || "whatever's on hand"}. Emit it with the emit_quick_workout tool. Weights in pounds, 0 for bodyweight.`;
+  const prompt = `Build ONE one-off workout for ${minutes} minutes, focus: ${focus}, equipment: ${equipment || "whatever's on hand"}. Emit it with the emit_quick_workout tool. Weights in pounds, 0 for bodyweight. For a stretch, plank, or other static hold, set hold_s to the hold duration in seconds (reps_min/reps_max as a low placeholder, weight 0) instead of relying on reps.`;
   const response = await anthropic.messages.create({
     model: TRAINER_MODEL,
     max_tokens: 1500,
@@ -261,7 +265,7 @@ async function createQuickWorkoutCore(userId, timezone, { minutes, focus, equipm
     const weight = exercise.is_bodyweight ? 0 : ex.weight ?? 0;
     resolvedExercises.push({
       exercise_id: exercise.id, name: ex.name, cue: ex.cue || "", rest_s: ex.rest_s || 60,
-      sets: Array.from({ length: Math.max(1, ex.sets || 3) }, () => ({ reps_min: ex.reps_min || 8, reps_max: ex.reps_max || 12, weight, rpe_target: null })),
+      sets: Array.from({ length: Math.max(1, ex.sets || 3) }, () => ({ reps_min: ex.reps_min || 8, reps_max: ex.reps_max || 12, weight, rpe_target: null, hold_s: ex.hold_s || null })),
     });
   }
   const today = localToday(timezone);

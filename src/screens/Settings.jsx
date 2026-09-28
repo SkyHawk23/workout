@@ -4,9 +4,24 @@ import { api } from "../lib/api.js";
 import { useStore } from "../store/useStore.js";
 import Btn from "../components/Btn.jsx";
 import Seg from "../components/Seg.jsx";
+import Dialog from "../components/Dialog.jsx";
 import { TextInput } from "../components/Field.jsx";
 import { kicker } from "../lib/helpers.js";
 import { localToday } from "../../lib/date.js";
+
+// Relative time with hour granularity, for "Last synced 2 hours ago" — a
+// device's last_seen_at/paired_at are full timestamps, unlike the
+// date-only strings agoText() in helpers.js is built for.
+function timeAgo(iso) {
+  if (!iso) return "never";
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -23,9 +38,20 @@ export default function Settings() {
   const [limitations, setLimitations] = useState("");
   const [profileNote, setProfileNote] = useState("");
 
+  const [devices, setDevices] = useState([]);
+  const [addingWatch, setAddingWatch] = useState(false);
+  const [pairCode, setPairCode] = useState("");
+  const [pairNote, setPairNote] = useState("");
+  const [pairError, setPairError] = useState("");
+  const [pairing, setPairing] = useState(false);
+  const [renaming, setRenaming] = useState(null); // {id, name}
+
+  const loadDevices = () => api("auth", "devices-list", {}).then((res) => setDevices(res.devices || [])).catch(() => {});
+
   useEffect(() => {
     api("household", "get", {}).then((res) => setHousehold(res)).catch(() => {});
     api("trainer", "get-profile", {}).then((res) => setLimitations(res.profile?.limitations || "")).catch(() => {});
+    loadDevices();
   }, []);
 
   async function changePassword(e) {
@@ -80,6 +106,36 @@ export default function Settings() {
   async function doLogout() {
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  function openAddWatch() {
+    setPairCode(""); setPairNote(""); setPairError(""); setAddingWatch(true);
+  }
+
+  async function confirmPair() {
+    setPairError(""); setPairing(true);
+    try {
+      await api("auth", "devices-confirm", { code: pairCode });
+      setPairNote("Paired! Your watch will finish connecting in a few seconds.");
+      loadDevices();
+    } catch (err) {
+      setPairError(err.message || "That code is invalid or has expired");
+    } finally {
+      setPairing(false);
+    }
+  }
+
+  async function saveRename() {
+    if (!renaming) return;
+    await api("auth", "devices-rename", { id: renaming.id, name: renaming.name });
+    setRenaming(null);
+    loadDevices();
+  }
+
+  async function removeDevice(device) {
+    if (!confirm(`Remove "${device.name}"? It will need to be paired again to sync.`)) return;
+    await api("auth", "devices-revoke", { id: device.id });
+    loadDevices();
   }
 
   return (
@@ -142,10 +198,66 @@ export default function Settings() {
       </div>
 
       <div style={{ marginTop: "var(--space-8)" }}>
+        <div style={kicker("var(--color-neutral-700)")}>Garmin watch</div>
+        <div style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5 }}>Pair a watch to run and log workouts right from your wrist.</div>
+        {devices.map((d) => (
+          <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderBottom: "1px solid var(--color-divider)" }}>
+            <div>
+              <div style={{ fontSize: 15 }}>{d.name}</div>
+              <div style={{ fontSize: 12, color: "var(--color-neutral-700)" }}>Last synced {timeAgo(d.last_seen_at)}</div>
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-2)" }}>
+              <Btn variant="ghost" style={{ minHeight: 32, padding: "0 10px" }} onClick={() => setRenaming({ id: d.id, name: d.name })}>Rename</Btn>
+              <Btn variant="ghost" style={{ minHeight: 32, padding: "0 10px" }} onClick={() => removeDevice(d)}>Remove</Btn>
+            </div>
+          </div>
+        ))}
+        <Btn variant="secondary" style={{ minHeight: 40, marginTop: "var(--space-3)" }} onClick={openAddWatch}>Add a watch</Btn>
+      </div>
+
+      <div style={{ marginTop: "var(--space-8)" }}>
         <div style={kicker("var(--color-neutral-700)")}>Your data</div>
         <div style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5 }}>Download everything The Daily Lift knows about your training.</div>
         <Btn variant="secondary" style={{ width: "100%", minHeight: 44 }} onClick={exportData}>Export my data</Btn>
       </div>
+
+      {addingWatch && (
+        <Dialog
+          title="Add a watch"
+          actions={<>
+            <Btn variant="ghost" style={{ minHeight: 44 }} onClick={() => setAddingWatch(false)}>{pairNote ? "Done" : "Cancel"}</Btn>
+            {!pairNote && <Btn style={{ minHeight: 44 }} disabled={pairing || pairCode.length !== 6} onClick={confirmPair}>{pairing ? "Pairing…" : "Pair"}</Btn>}
+          </>}
+        >
+          {pairNote ? (
+            <div style={{ fontSize: 15, lineHeight: 1.5 }}>{pairNote}</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 14, color: "var(--color-neutral-700)", marginBottom: "var(--space-3)", lineHeight: 1.5 }}>
+                Open The Daily Lift on your watch, choose <strong>Pair</strong>, and enter the code it shows.
+              </div>
+              <TextInput
+                label="Pairing code" autoComplete="off" maxLength={6}
+                value={pairCode}
+                onChange={(e) => setPairCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              />
+              {pairError && <div style={{ fontSize: 13, color: "var(--color-accent-2-700)", marginTop: 8 }}>{pairError}</div>}
+            </>
+          )}
+        </Dialog>
+      )}
+
+      {renaming && (
+        <Dialog
+          title="Rename watch"
+          actions={<>
+            <Btn variant="ghost" style={{ minHeight: 44 }} onClick={() => setRenaming(null)}>Cancel</Btn>
+            <Btn style={{ minHeight: 44 }} disabled={!renaming.name.trim()} onClick={saveRename}>Save</Btn>
+          </>}
+        >
+          <TextInput label="Name" autoComplete="off" value={renaming.name} onChange={(e) => setRenaming((r) => ({ ...r, name: e.target.value }))} />
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -11,8 +11,10 @@ export function agoText(iso) {
   return Math.floor(days / 7) + " weeks ago";
 }
 
-// A planned-session "set" is {reps_min, reps_max, weight, rpe_target}.
+// A planned-session "set" is {reps_min, reps_max, weight, rpe_target} for a
+// normal set, or {hold_s} for a timed one (a stretch, plank, or other hold).
 export function setTarget(set) {
+  if (set.hold_s) return `Hold ${set.hold_s}s`;
   const reps = set.reps_min === set.reps_max ? `${set.reps_max}` : `${set.reps_min}-${set.reps_max}`;
   return set.weight ? `${set.weight} lb × ${reps}` : `${reps} reps`;
 }
