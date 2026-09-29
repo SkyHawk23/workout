@@ -164,7 +164,7 @@ async function today({ user }) {
   const [row] = await sql`
     select * from planned_sessions
     where user_id = ${user.id} and status = 'planned' and date = ${todayIso} and kind in ('program', 'quick')
-    order by kind
+    order by (kind = 'quick') desc, updated_at desc -- a quick workout asked for today beats the plan; newest first
     limit 1
   `;
   if (row) return { s: compactSession(row) };
