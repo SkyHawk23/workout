@@ -236,6 +236,23 @@ if (!dbAvailable) {
       expect(res.body.s.x[0].s).toEqual([[0, 0, 0, 30], [8, 10, 0]]);
     });
 
+    it("prefers a quick workout added today over today's program session", async () => {
+      const user = await makeUser();
+      const { token } = await pairNewDevice(user.id);
+      const todayIso = localToday("UTC");
+      await sql`
+        insert into planned_sessions (program_id, user_id, date, title, exercises, status, kind)
+        values (null, ${user.id}, ${todayIso}, 'Day 1', '[]', 'planned', 'program')
+      `;
+      const [quick] = await sql`
+        insert into planned_sessions (program_id, user_id, date, title, exercises, status, kind)
+        values (null, ${user.id}, ${todayIso}, 'Quick workout', '[]', 'planned', 'quick')
+        returning id
+      `;
+      const res = await call("today", { token });
+      expect(res.body.s.id).toBe(quick.id);
+    });
+
     it("returns the next upcoming session on a rest day", async () => {
       const user = await makeUser();
       const { token } = await pairNewDevice(user.id);
