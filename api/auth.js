@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { sql } from "./_db.js";
 import { withHandler } from "./_respond.js";
 import {
@@ -79,6 +80,36 @@ async function login(req, res, body) {
     user.timezone = timezone;
   }
 
+  setAuthCookie(res, signToken(user));
+  return { user: sanitizeUser(user) };
+}
+
+// "Try the demo": signs anyone into one shared demo member, no password.
+// Temporary, for letting people test the app and watch. A shared account
+// (rather than one per visitor) keeps AI spend under a single member's
+// monthly token cap. It's a plain member, not a household admin, so it
+// can't mint invite codes that pull real accounts into its household. Its
+// password is random and never shown, so this action is the only way in.
+const DEMO_EMAIL = "demo@workout.lilleylabs.com";
+
+async function demo(req, res, body) {
+  const timezone = body.timezone ? str(body.timezone, { field: "timezone", required: false, max: 100 }) : "UTC";
+  let [user] = await sql`select * from users where email = ${DEMO_EMAIL}`;
+  if (!user) {
+    const [household] = await sql`insert into households (name) values ('Demo household') returning id`;
+    const password_hash = await hashPassword(randomBytes(24).toString("hex"));
+    [user] = await sql`
+      insert into users (household_id, role, email, password_hash, display_name, timezone)
+      values (${household.id}, 'member', ${DEMO_EMAIL}, ${password_hash}, 'Demo', ${timezone})
+      on conflict (email) do nothing
+      returning *
+    `;
+    if (!user) [user] = await sql`select * from users where email = ${DEMO_EMAIL}`; // lost a first-click race
+    else await sql`insert into trainer_profiles (user_id) values (${user.id}) on conflict do nothing`;
+  } else if (timezone !== user.timezone) {
+    await sql`update users set timezone = ${timezone} where id = ${user.id}`;
+    user.timezone = timezone;
+  }
   setAuthCookie(res, signToken(user));
   return { user: sanitizeUser(user) };
 }
@@ -167,7 +198,7 @@ async function devicesRevoke(req, res, body) {
 }
 
 export default withHandler({
-  signup, login, logout, me,
+  signup, login, demo, logout, me,
   "change-password": changePassword,
   "update-prefs": updatePrefs,
   "devices-list": devicesList,
