@@ -250,6 +250,42 @@ if (!dbAvailable) {
     });
   });
 
+  describe("train-now", () => {
+    it("moves the next program session to today and returns it in the today shape", async () => {
+      const user = await makeUser("America/New_York");
+      const { token } = await pairNewDevice(user.id);
+      const future = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+      const [planned] = await sql`
+        insert into planned_sessions (program_id, user_id, date, title, exercises, status, kind)
+        values (null, ${user.id}, ${future}, 'Lower A', ${JSON.stringify([
+          { exercise_id: crypto.randomUUID(), name: "Back Squat", rest_s: 120, sets: [{ reps_min: 5, reps_max: 6, weight: 185 }] },
+        ])}, 'planned', 'program')
+        returning id
+      `;
+
+      const res = await call("train-now", { token });
+      expect(res.status).toBe(200);
+      expect(res.body.s.id).toBe(planned.id);
+      expect(res.body.s.t).toBe("Lower A");
+      expect(res.body.s.x[0].s).toEqual([[5, 6, 185]]);
+
+      const [row] = await sql`select date from planned_sessions where id = ${planned.id}`;
+      expect(row.date).toBe(localToday("America/New_York"));
+      const [change] = await sql`select reason from session_changes where planned_session_id = ${planned.id}`;
+      expect(change.reason).toBe("start_today");
+
+      const today = await call("today", { token });
+      expect(today.body.s.id).toBe(planned.id); // a second call sees it as today's session
+    });
+
+    it("returns {s:null} when nothing is planned, and requires a device token", async () => {
+      const user = await makeUser();
+      const { token } = await pairNewDevice(user.id);
+      expect((await call("train-now", { token })).body).toEqual({ s: null });
+      expect((await call("train-now")).status).toBe(401);
+    });
+  });
+
   describe("start / log / finish", () => {
     it("log is idempotent on client_id, and finish reports weight changes", async () => {
       const user = await makeUser();

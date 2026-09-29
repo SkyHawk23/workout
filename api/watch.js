@@ -12,6 +12,7 @@ import { sql } from "./_db.js";
 import { httpError } from "./_auth.js";
 import { str, arr, LOG_SETS_BATCH_MAX } from "./_validate.js";
 import { startSession, logSets, finishSession } from "./_sessions.js";
+import { moveSessionToToday } from "./_scheduling.js";
 import { localToday } from "../lib/date.js";
 
 const PAIR_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
@@ -176,6 +177,21 @@ async function today({ user }) {
   return next ? { s: null, nx: { d: next.date, t: next.title } } : { s: null };
 }
 
+// The rest-day screen's TRAIN ANYWAY: pulls the next planned program
+// session forward to today (same helper as the website's "Train now anyway"
+// button, so Undo works), then answers exactly like `today`.
+async function trainNow({ user }) {
+  const current = await today({ user });
+  if (current.s) return current;
+  const [next] = await sql`
+    select id from planned_sessions
+    where user_id = ${user.id} and kind = 'program' and status = 'planned' and date > ${localToday(user.timezone)}
+    order by date limit 1
+  `;
+  const moved = next && (await moveSessionToToday(sql, user.id, next.id, user.timezone));
+  return { s: moved ? compactSession(moved.session) : null };
+}
+
 async function start({ user }, body) {
   const client_id = str(body.c, { field: "c" });
   const planned_session_id = body.ps ? str(body.ps, { field: "ps", required: false }) : undefined;
@@ -205,7 +221,7 @@ async function finish({ user }, body) {
 }
 
 const PUBLIC_ACTIONS = { "pair-start": pairStart, "pair-poll": pairPoll };
-const DEVICE_ACTIONS = { today, start, log, finish };
+const DEVICE_ACTIONS = { today, "train-now": trainNow, start, log, finish };
 
 export default async function handler(req, res) {
   try {
