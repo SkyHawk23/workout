@@ -46,12 +46,18 @@ export default function Settings() {
   const [pairing, setPairing] = useState(false);
   const [renaming, setRenaming] = useState(null); // {id, name}
 
+  const [weights, setWeights] = useState([]);
+  const [editingWeight, setEditingWeight] = useState(null); // {exercise_id, name, weight}
+  const [savingWeight, setSavingWeight] = useState(false);
+
   const loadDevices = () => api("auth", "devices-list", {}).then((res) => setDevices(res.devices || [])).catch(() => {});
+  const loadWeights = () => api("trainer", "working-weights", {}).then((res) => setWeights(res.weights || [])).catch(() => {});
 
   useEffect(() => {
     api("household", "get", {}).then((res) => setHousehold(res)).catch(() => {});
     api("trainer", "get-profile", {}).then((res) => setLimitations(res.profile?.limitations || "")).catch(() => {});
     loadDevices();
+    loadWeights();
   }, []);
 
   async function changePassword(e) {
@@ -138,6 +144,18 @@ export default function Settings() {
     loadDevices();
   }
 
+  async function saveWeight() {
+    if (!editingWeight) return;
+    setSavingWeight(true);
+    try {
+      await api("trainer", "set-working-weight", { exercise_id: editingWeight.exercise_id, weight: editingWeight.weight });
+      setEditingWeight(null);
+      loadWeights();
+    } finally {
+      setSavingWeight(false);
+    }
+  }
+
   return (
     <div style={{ padding: "28px 20px 0" }}>
       <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px" }}>Settings</div>
@@ -216,6 +234,23 @@ export default function Settings() {
       </div>
 
       <div style={{ marginTop: "var(--space-8)" }}>
+        <div style={kicker("var(--color-neutral-700)")}>Working weights</div>
+        <div style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5 }}>
+          The weight your trainer starts you at for each exercise. Changing one only affects future workouts.
+        </div>
+        {!weights.length && <div style={{ fontSize: 14, color: "var(--color-neutral-700)" }}>No working weights tracked yet.</div>}
+        {weights.map((w) => (
+          <div key={w.exercise_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 0", borderBottom: "1px solid var(--color-divider)" }}>
+            <div style={{ fontSize: 15 }}>{w.name}</div>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "baseline" }}>
+              <div style={{ fontSize: 15, color: "var(--color-neutral-700)" }} className="tabular">{w.weight} lb</div>
+              <Btn variant="ghost" style={{ minHeight: 32, padding: "0 10px" }} onClick={() => setEditingWeight({ ...w })}>Edit</Btn>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: "var(--space-8)" }}>
         <div style={kicker("var(--color-neutral-700)")}>Your data</div>
         <div style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: "6px 0 12px", lineHeight: 1.5 }}>Download everything The Daily Lift knows about your training.</div>
         <Btn variant="secondary" style={{ width: "100%", minHeight: 44 }} onClick={exportData}>Export my data</Btn>
@@ -256,6 +291,25 @@ export default function Settings() {
           </>}
         >
           <TextInput label="Name" autoComplete="off" value={renaming.name} onChange={(e) => setRenaming((r) => ({ ...r, name: e.target.value }))} />
+        </Dialog>
+      )}
+
+      {editingWeight && (
+        <Dialog
+          title={`Working weight — ${editingWeight.name}`}
+          actions={<>
+            <Btn variant="ghost" style={{ minHeight: 44 }} onClick={() => setEditingWeight(null)}>Cancel</Btn>
+            <Btn style={{ minHeight: 44 }} disabled={savingWeight} onClick={saveWeight}>{savingWeight ? "Saving…" : "Save"}</Btn>
+          </>}
+        >
+          <div className="field">
+            <label>Weight (lb)</label>
+            <input
+              className="input" type="number" inputMode="numeric" autoComplete="off" min={0}
+              value={editingWeight.weight}
+              onChange={(e) => setEditingWeight((w) => ({ ...w, weight: Number(e.target.value) }))}
+            />
+          </div>
         </Dialog>
       )}
     </div>

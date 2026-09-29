@@ -35,6 +35,12 @@ export default function Program() {
     load();
   }
 
+  async function remove(session) {
+    if (!confirm(`Remove "${session.title}"? This can't be undone.`)) return;
+    await api("program", "remove", { id: session.id });
+    load();
+  }
+
   async function saveMove() {
     if (!moving || !moveDate) return;
     await api("program", "reschedule", { id: moving.id, date: moveDate });
@@ -81,6 +87,7 @@ export default function Program() {
                         <div style={{ display: "flex", gap: "var(--space-3)", marginTop: 6 }}>
                           <Btn variant="ghost" style={{ minHeight: 32, padding: 0, fontSize: 13 }} onClick={() => { setMoving(s); setMoveDate(s.date); }}>Move to…</Btn>
                           <Btn variant="ghost" style={{ minHeight: 32, padding: 0, fontSize: 13 }} onClick={() => skip(s)}>Skip</Btn>
+                          <Btn variant="ghost" style={{ minHeight: 32, padding: 0, fontSize: 13 }} onClick={() => remove(s)}>Remove</Btn>
                         </div>
                       )}
                     </div>

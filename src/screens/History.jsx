@@ -2,15 +2,20 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import Btn from "../components/Btn.jsx";
 import { fmtDate } from "../lib/helpers.js";
+import { useStartWorkout } from "../hooks/useStartWorkout.jsx";
 
 export default function History() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [details, setDetails] = useState({}); // {id: detail[]}
+  const [saved, setSaved] = useState([]);
+  const [runningAgain, setRunningAgain] = useState(null); // session_log_id in flight
+  const { begin, modal } = useStartWorkout();
 
   useEffect(() => {
     api("sessions", "history", {}).then((res) => setSessions(res.sessions || [])).finally(() => setLoading(false));
+    api("program", "quick-list", {}).then((res) => setSaved(res.sessions || [])).catch(() => {});
   }, []);
 
   async function toggle(session) {
@@ -29,9 +34,33 @@ export default function History() {
     setOpenId((o) => (o === session.id ? null : o));
   }
 
+  async function runAgain(session) {
+    setRunningAgain(session.id);
+    try {
+      const res = await api("program", "run-again", { session_log_id: session.id });
+      await begin(res.session.id);
+    } finally {
+      setRunningAgain(null);
+    }
+  }
+
   return (
     <div style={{ padding: "28px 20px 0" }}>
       <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.4px" }}>History</div>
+
+      {saved.length > 0 && (
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-neutral-700)" }}>Saved workouts</div>
+          {saved.map((s) => (
+            <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "var(--space-2)", padding: "10px 0", borderBottom: "1px solid var(--color-divider)" }}>
+              <div style={{ fontSize: 16 }}>{s.title}</div>
+              <Btn variant="ghost" style={{ minHeight: 32, padding: "0 10px" }} onClick={() => begin(s.id)}>Start</Btn>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--color-neutral-700)", marginTop: "var(--space-6)" }}>Completed</div>
       {loading && <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: "var(--space-4)" }}>Loading…</div>}
       {!loading && sessions.length === 0 && <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: "var(--space-4)" }}>No sessions logged yet.</div>}
       {sessions.map((h) => {
@@ -58,12 +87,20 @@ export default function History() {
                     <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, whiteSpace: "nowrap" }}>{d.target}</div>
                   </div>
                 ))}
-                <Btn variant="ghost" style={{ alignSelf: "flex-start", minHeight: 36, padding: "0 12px", marginTop: 4 }} onClick={() => remove(h)}>Remove</Btn>
+                <div style={{ display: "flex", gap: "var(--space-2)", marginTop: 4 }}>
+                  {h.has_template && (
+                    <Btn variant="ghost" style={{ alignSelf: "flex-start", minHeight: 36, padding: "0 12px" }} disabled={runningAgain === h.id} onClick={() => runAgain(h)}>
+                      {runningAgain === h.id ? "Starting…" : "Run again"}
+                    </Btn>
+                  )}
+                  <Btn variant="ghost" style={{ alignSelf: "flex-start", minHeight: 36, padding: "0 12px" }} onClick={() => remove(h)}>Remove</Btn>
+                </div>
               </div>
             )}
           </div>
         );
       })}
+      {modal}
     </div>
   );
 }

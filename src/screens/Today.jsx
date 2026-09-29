@@ -5,6 +5,7 @@ import { useStore } from "../store/useStore.js";
 import Btn from "../components/Btn.jsx";
 import { kicker, totalSets, listNames } from "../lib/helpers.js";
 import { localToday, weekdayOf } from "../../lib/date.js";
+import { useStartWorkout } from "../hooks/useStartWorkout.jsx";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -19,6 +20,7 @@ export default function Today() {
   const [error, setError] = useState("");
   const [startingToday, setStartingToday] = useState(false);
   const [building, setBuilding] = useState(false);
+  const { begin, modal } = useStartWorkout();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -75,7 +77,7 @@ export default function Today() {
     <div>
       <div style={{ padding: "28px 20px 0" }}>
         {todaySession ? (
-          <SessionCard title="Today" session={todaySession} onBegin={() => navigate(`/run/${todaySession.id}`)} onPreview={() => navigate(`/program/${todaySession.id}`)} />
+          <SessionCard title="Today" session={todaySession} onBegin={() => begin(todaySession.id)} onPreview={() => navigate(`/program/${todaySession.id}`)} />
         ) : !program && profileComplete ? (
           <div>
             <div style={{ ...kicker("var(--color-accent-700)"), marginBottom: 8 }}>Today</div>
@@ -112,7 +114,7 @@ export default function Today() {
 
       {quick.map((s) => (
         <div key={s.id} style={{ padding: "0 20px", marginTop: "var(--space-6)" }}>
-          <SessionCard title="Quick workout" session={s} onBegin={() => navigate(`/run/${s.id}`)} onPreview={() => navigate(`/program/${s.id}`)} />
+          <SessionCard title="Quick workout" session={s} onBegin={() => begin(s.id)} onPreview={() => navigate(`/program/${s.id}`)} />
         </div>
       ))}
 
@@ -122,6 +124,7 @@ export default function Today() {
           <div style={{ fontSize: 15, marginTop: 8, lineHeight: 1.6, fontStyle: "italic", color: "var(--color-neutral-800)" }}>{trainerNote}</div>
         </div>
       )}
+      {modal}
     </div>
   );
 }

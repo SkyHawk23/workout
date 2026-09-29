@@ -94,6 +94,49 @@ async function startToday(req, res, body) {
   return { session: result.session };
 }
 
+async function remove(req, res, body) {
+  const session = requireUser(req);
+  const id = str(body.id, { field: "id" });
+  const result = await sql`delete from planned_sessions where id = ${id} and user_id = ${session.id} returning id`;
+  if (!result.length) throw httpError(404, "Session not found", "not_found");
+  return { ok: true };
+}
+
+// Not-yet-done quick/custom workouts (AI "Quick workout" and "Build your
+// own" alike) — a member's saved library of things they haven't run yet.
+async function quickList(req) {
+  const session = requireUser(req);
+  const sessions = await sql`
+    select id, title, date, status from planned_sessions
+    where user_id = ${session.id} and kind = 'quick' and status = 'planned'
+    order by date desc nulls last, updated_at desc
+  `;
+  return { sessions };
+}
+
+// Clones a completed workout's original planned_session (title, note,
+// exercises — same reps/weight, a literal repeat) into a new one dated
+// today, so "run it again" reuses the exact same start/log/finish path as
+// any other planned session.
+async function runAgain(req, res, body) {
+  const session = requireUser(req);
+  const session_log_id = str(body.session_log_id, { field: "session_log_id" });
+  const [log] = await sql`select planned_session_id from session_logs where id = ${session_log_id} and user_id = ${session.id}`;
+  if (!log?.planned_session_id) throw httpError(400, "This workout can't be repeated", "no_template");
+
+  const [original] = await sql`select * from planned_sessions where id = ${log.planned_session_id} and user_id = ${session.id}`;
+  if (!original) throw httpError(404, "Original workout not found", "not_found");
+
+  const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
+  const today = localToday(timezone);
+  const [row] = await sql`
+    insert into planned_sessions (program_id, user_id, date, title, note, exercises, status, kind)
+    values (null, ${session.id}, ${today}, ${original.title}, ${original.note || ""}, ${JSON.stringify(original.exercises)}, 'planned', 'quick')
+    returning *
+  `;
+  return { session: row };
+}
+
 async function undoChange(req, res, body) {
   const session = requireUser(req);
   const change_id = str(body.change_id, { field: "change_id" });
@@ -119,5 +162,5 @@ async function undoChange(req, res, body) {
 
 export default withHandler({
   current, week, session: getSession, skip, reschedule, "undo-change": undoChange,
-  "start-today": startToday,
+  "start-today": startToday, remove, "quick-list": quickList, "run-again": runAgain,
 });

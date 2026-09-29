@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { useStore } from "../store/useStore.js";
 import Btn from "../components/Btn.jsx";
 import Seg from "../components/Seg.jsx";
 import { kicker } from "../lib/helpers.js";
+import { localToday } from "../../lib/date.js";
 import MarkdownLite from "../components/MarkdownLite.jsx";
 
 const FOCUS_OPTIONS = ["Full body", "Upper body", "Lower body", "Core"];
@@ -16,8 +18,9 @@ export default function Trainer() {
       <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
         <button className={mode === "chat" ? "btn btn-primary" : "btn btn-secondary"} style={{ flex: 1, minHeight: 40 }} onClick={() => setMode("chat")}>Ask</button>
         <button className={mode === "quick" ? "btn btn-primary" : "btn btn-secondary"} style={{ flex: 1, minHeight: 40 }} onClick={() => setMode("quick")}>Quick workout</button>
+        <button className={mode === "custom" ? "btn btn-primary" : "btn btn-secondary"} style={{ flex: 1, minHeight: 40 }} onClick={() => setMode("custom")}>Build</button>
       </div>
-      {mode === "chat" ? <Chat /> : <QuickWorkout />}
+      {mode === "chat" ? <Chat /> : mode === "quick" ? <QuickWorkout /> : <CustomWorkout />}
     </div>
   );
 }
@@ -147,6 +150,102 @@ function QuickWorkout() {
       </div>
       <Btn style={{ width: "100%", minHeight: 52, fontSize: 17, marginTop: "var(--space-6)" }} disabled={busy} onClick={build}>{busy ? "Building…" : "Build the workout"}</Btn>
       {note && <div style={{ fontSize: 14, color: "var(--color-neutral-700)", marginTop: "var(--space-3)", lineHeight: 1.5 }}>{note}</div>}
+    </div>
+  );
+}
+
+const BLANK_ROW = () => ({ exercise_id: "", sets: 3, reps: 8, weight: 0, rest_s: 90 });
+
+function CustomWorkout() {
+  const user = useStore((s) => s.user);
+  const [catalog, setCatalog] = useState([]);
+  const [title, setTitle] = useState("My Workout");
+  const [date, setDate] = useState(() => localToday(user?.timezone));
+  const [rows, setRows] = useState([BLANK_ROW()]);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api("trainer", "list-exercises", {}).then((res) => setCatalog(res.exercises || [])).catch(() => {});
+  }, []);
+
+  function updateRow(i, patch) {
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    setRows((rs) => [...rs, BLANK_ROW()]);
+  }
+  function removeRow(i) {
+    setRows((rs) => rs.filter((_, idx) => idx !== i));
+  }
+
+  async function save() {
+    setError(""); setNote("");
+    const valid = rows.filter((r) => r.exercise_id);
+    if (!valid.length) { setError("Add at least one exercise."); return; }
+    setBusy(true);
+    try {
+      await api("trainer", "custom-workout", {
+        title, date,
+        exercises: valid.map((r) => ({ exercise_id: r.exercise_id, sets: r.sets, reps: r.reps, weight: r.weight, rest_s: r.rest_s })),
+      });
+      setNote("Added to your Program.");
+      setRows([BLANK_ROW()]);
+    } catch (err) {
+      setError(err.message || "Couldn't save that workout.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: "var(--space-6)" }}>
+      <div style={{ fontSize: 15, color: "var(--color-neutral-700)", lineHeight: 1.5 }}>Pick your own exercises, sets, reps, and weight.</div>
+
+      <div className="field" style={{ marginTop: "var(--space-4)" }}>
+        <label>Workout name</label>
+        <input className="input" autoComplete="off" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <div className="field" style={{ marginTop: "var(--space-3)" }}>
+        <label>Date</label>
+        <input className="input" type="date" autoComplete="off" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
+      <div style={{ marginTop: "var(--space-4)", display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        {rows.map((row, i) => (
+          <div key={i} style={{ padding: "var(--space-3)", border: "1px solid var(--color-divider)" }}>
+            <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+              <select className="input" style={{ flex: 1 }} value={row.exercise_id} onChange={(e) => updateRow(i, { exercise_id: e.target.value })}>
+                <option value="">Choose an exercise…</option>
+                {catalog.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+              </select>
+              {rows.length > 1 && (
+                <button aria-label="Remove exercise" onClick={() => removeRow(i)} style={{ background: "none", border: "none", fontSize: 22, lineHeight: 1, color: "var(--color-neutral-700)", cursor: "pointer", padding: "0 6px" }}>&times;</button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Sets</label>
+                <input className="input" type="number" inputMode="numeric" autoComplete="off" min={1} max={10} value={row.sets} onChange={(e) => updateRow(i, { sets: Number(e.target.value) })} />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Reps</label>
+                <input className="input" type="number" inputMode="numeric" autoComplete="off" min={1} max={100} value={row.reps} onChange={(e) => updateRow(i, { reps: Number(e.target.value) })} />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Weight (lb)</label>
+                <input className="input" type="number" inputMode="numeric" autoComplete="off" min={0} value={row.weight} onChange={(e) => updateRow(i, { weight: Number(e.target.value) })} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Btn variant="ghost" style={{ width: "100%", minHeight: 40, marginTop: "var(--space-3)" }} onClick={addRow}>+ Add exercise</Btn>
+      {error && <div style={{ fontSize: 13, color: "var(--color-accent-2-700)", marginTop: 8 }}>{error}</div>}
+      {note && <div style={{ fontSize: 13, color: "var(--color-accent-700)", marginTop: 8 }}>{note}</div>}
+      <Btn style={{ width: "100%", minHeight: 52, fontSize: 17, marginTop: "var(--space-4)" }} disabled={busy} onClick={save}>{busy ? "Saving…" : "Add to Program"}</Btn>
     </div>
   );
 }

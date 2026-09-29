@@ -284,6 +284,75 @@ async function getProfile(req) {
   return { profile };
 }
 
+// ── Exercise catalog + manual ("build your own") workouts ───────────────
+async function listExercises(req) {
+  requireUser(req);
+  const exercises = await sql`select id, name, category, equipment, is_bodyweight from exercises order by name`;
+  return { exercises };
+}
+
+async function customWorkout(req, res, body) {
+  const session = requireUser(req);
+  const title = str(body.title, { field: "title", min: 1, max: 80 });
+  const date = str(body.date, { field: "date", min: 10, max: 10 });
+  const items = arr(body.exercises, { field: "exercises", maxLen: 20 });
+  if (!items.length) throw httpError(400, "Add at least one exercise", "validation");
+
+  const resolvedExercises = [];
+  for (const ex of items) {
+    const exercise_id = str(ex.exercise_id, { field: "exercise_id" });
+    const [exercise] = await sql`select * from exercises where id = ${exercise_id}`;
+    if (!exercise) throw httpError(400, "Unknown exercise", "validation");
+    const sets = int(ex.sets, { field: "sets", min: 1, max: 10 });
+    const reps = int(ex.reps, { field: "reps", min: 1, max: 100 });
+    const weight = exercise.is_bodyweight ? 0 : (int(ex.weight, { field: "weight", min: 0, max: 2000, required: false }) ?? 0);
+    const rest_s = int(ex.rest_s, { field: "rest_s", min: 0, max: 600, required: false }) ?? 90;
+    resolvedExercises.push({
+      exercise_id: exercise.id, name: exercise.name, cue: "", rest_s,
+      sets: Array.from({ length: sets }, () => ({ reps_min: reps, reps_max: reps, weight, rpe_target: null })),
+    });
+  }
+
+  const [row] = await sql`
+    insert into planned_sessions (program_id, user_id, date, title, note, exercises, status, kind)
+    values (null, ${session.id}, ${date}, ${title}, 'Custom workout', ${JSON.stringify(resolvedExercises)}, 'planned', 'quick')
+    returning *
+  `;
+  return { session: row };
+}
+
+// ── Working weights ───────────────────────────────────────────────────
+// trainer_profiles.working_weights is the per-exercise baseline the
+// progression engine and program generation both read from — surfacing
+// and letting a member override it directly here, rather than only ever
+// changing implicitly via calibration/progression.
+async function getWorkingWeights(req) {
+  const session = requireUser(req);
+  const [profile] = await sql`select working_weights from trainer_profiles where user_id = ${session.id}`;
+  const ids = Object.keys(profile?.working_weights || {});
+  if (!ids.length) return { weights: [] };
+  const rows = await sql`select id, name from exercises where id = any(${ids})`;
+  const nameById = Object.fromEntries(rows.map((r) => [r.id, r.name]));
+  const weights = ids
+    .map((id) => ({ exercise_id: id, name: nameById[id] || "Unknown exercise", weight: profile.working_weights[id]?.weight ?? 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { weights };
+}
+
+async function setWorkingWeight(req, res, body) {
+  const session = requireUser(req);
+  const exercise_id = str(body.exercise_id, { field: "exercise_id" });
+  const weight = int(body.weight, { field: "weight", min: 0, max: 2000 });
+  const [exercise] = await sql`select id from exercises where id = ${exercise_id}`;
+  if (!exercise) throw httpError(404, "Exercise not found", "not_found");
+
+  const [profile] = await sql`select working_weights from trainer_profiles where user_id = ${session.id}`;
+  const working_weights = { ...(profile?.working_weights || {}) };
+  working_weights[exercise_id] = { weight, miss_streak: 0 };
+  await sql`update trainer_profiles set working_weights = ${JSON.stringify(working_weights)}, updated_at = now() where user_id = ${session.id}`;
+  return { ok: true };
+}
+
 async function intake(req, res, body) {
   const session = requireUser(req);
   const goals = arr(body.goals, { field: "goals", maxLen: 20 });
@@ -578,4 +647,8 @@ export default withHandler({
   "generate-program": generateProgram,
   chat,
   "quick-workout": quickWorkout,
+  "list-exercises": listExercises,
+  "custom-workout": customWorkout,
+  "working-weights": getWorkingWeights,
+  "set-working-weight": setWorkingWeight,
 });
