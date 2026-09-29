@@ -57,6 +57,17 @@ export function evaluateExercisePerformance(plannedExercise, loggedSets) {
 
 // previousMissStreak -> {missStreak, weight, changed}. First miss just
 // records itself and holds the weight; a second consecutive miss cuts it.
+// Timed holds (stretches, planks) never take weight, and outside a
+// calibration week a set planned at 0 lb is bodyweight by the planner's
+// contract, even when the exercise library doesn't flag it is_bodyweight.
+// (Calibration may plan 0 for an unknown working weight, so it's exempt.)
+export function isProgressable(plannedExercise, isCalibration) {
+  const sets = plannedExercise?.sets || [];
+  if (sets.some((s) => s.hold_s)) return false;
+  if (isCalibration || !plannedExercise) return true;
+  return sets.some((s) => s.weight > 0);
+}
+
 export function applyMissLogic(previousMissStreak, currentWeight) {
   if ((previousMissStreak || 0) === 0) {
     return { missStreak: 1, weight: currentWeight, changed: false };
@@ -133,6 +144,7 @@ export async function applyProgressionForSession(sessionLogId, userId, sql) {
     if (!exercise || exercise.is_bodyweight) continue;
 
     const plannedExercise = (planned.exercises || []).find((e) => e.exercise_id === exId);
+    if (!isProgressable(plannedExercise, planned.is_calibration)) continue;
     const setsForExercise = loggedSets.filter((s) => s.exercise_id === exId);
     const prevState = workingWeights[exId] || { weight: plannedExercise?.sets?.[0]?.weight || 0, miss_streak: 0 };
 

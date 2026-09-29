@@ -2,8 +2,23 @@ import { describe, it, expect } from "vitest";
 import {
   nextWeightOnSuccess, cutWeight, epleyWorkingWeight,
   evaluateExercisePerformance, applyMissLogic, isLowerBody,
-  weightForWeek, expandProgramWeeks,
+  weightForWeek, expandProgramWeeks, isProgressable,
 } from "../api/_progression.js";
+
+describe("isProgressable", () => {
+  const set = (o) => ({ reps_min: 1, reps_max: 1, weight: 0, ...o });
+  it("never progresses a timed hold, even in calibration", () => {
+    expect(isProgressable({ sets: [set({ hold_s: 30 })] }, false)).toBe(false);
+    expect(isProgressable({ sets: [set({ hold_s: 30 })] }, true)).toBe(false);
+  });
+  it("skips a 0 lb exercise (a stretch planned as 1 rep @ 0) outside calibration", () => {
+    expect(isProgressable({ sets: [set(), set()] }, false)).toBe(false);
+  });
+  it("still progresses weighted lifts, and 0 lb lifts in a calibration week", () => {
+    expect(isProgressable({ sets: [set({ reps_min: 6, reps_max: 8, weight: 140 })] }, false)).toBe(true);
+    expect(isProgressable({ sets: [set({ reps_min: 6, reps_max: 8 })] }, true)).toBe(true);
+  });
+});
 
 describe("isLowerBody", () => {
   it("treats the legs category as lower body", () => {
