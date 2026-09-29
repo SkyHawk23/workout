@@ -38,7 +38,7 @@ async function history(req, res, body) {
 
   const [{ timezone }] = await sql`select timezone from users where id = ${session.id}`;
   const rows = await sql`
-    select sl.id, sl.started_at, sl.ended_at, sl.source,
+    select sl.id, sl.started_at, sl.ended_at, sl.source, sl.planned_session_id,
       coalesce(ps.title, 'Workout') as name,
       (select count(*)::int from set_logs where session_log_id = sl.id) as sets
     from session_logs sl
@@ -51,7 +51,7 @@ async function history(req, res, body) {
     sessions: rows.map((r) => ({
       id: r.id, date: localDate(r.started_at, timezone), name: r.name, sets: r.sets,
       mins: r.ended_at ? Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) : null,
-      source: r.source,
+      source: r.source, has_template: r.planned_session_id !== null,
     })),
   };
 }

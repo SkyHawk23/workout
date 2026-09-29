@@ -3,12 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import Btn from "../components/Btn.jsx";
 import { setTarget, totalSets } from "../lib/helpers.js";
+import { useStartWorkout } from "../hooks/useStartWorkout.jsx";
 
 export default function Preview() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [error, setError] = useState("");
+  const { begin, modal } = useStartWorkout();
 
   useEffect(() => {
     api("program", "session", { id }).then((res) => setSession(res.session)).catch((err) => setError(err.message));
@@ -34,7 +36,8 @@ export default function Preview() {
           </div>
         ))}
       </div>
-      <Btn style={{ width: "100%", minHeight: 54, fontSize: 17, margin: "var(--space-6) 0 var(--space-4)" }} onClick={() => navigate(`/run/${session.id}`)}>Start workout</Btn>
+      <Btn style={{ width: "100%", minHeight: 54, fontSize: 17, margin: "var(--space-6) 0 var(--space-4)" }} onClick={() => begin(session.id)}>Start workout</Btn>
+      {modal}
     </div>
   );
 }
