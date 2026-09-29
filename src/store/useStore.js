@@ -29,7 +29,16 @@ export const useStore = create((set, get) => ({
 
   async login(email, password) {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const res = await api("auth", "login", { email, password, timezone });
+    return get().signedIn(await api("auth", "login", { email, password, timezone }));
+  },
+
+  // "Try the demo": the shared demo account, no password.
+  async demo() {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return get().signedIn(await api("auth", "demo", { timezone }));
+  },
+
+  async signedIn(res) {
     const prevId = get().user?.id;
     if (prevId && prevId !== res.user.id) await clearUserCache();
     set({ user: res.user, prefs: res.user.prefs });

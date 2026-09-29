@@ -6,6 +6,7 @@ import Btn from "../components/Btn.jsx";
 
 export default function Login() {
   const login = useStore((s) => s.login);
+  const demo = useStore((s) => s.demo);
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -15,10 +16,14 @@ export default function Login() {
 
   async function submit(e) {
     e.preventDefault();
+    await signIn(() => login(email, password));
+  }
+
+  async function signIn(fn) {
     setError("");
     setBusy(true);
     try {
-      await login(email, password);
+      await fn();
       navigate(location.state?.from?.pathname || "/today", { replace: true });
     } catch (err) {
       setError(err.message || "Couldn't sign in");
@@ -44,6 +49,11 @@ export default function Login() {
 
         <div style={{ fontSize: 14, color: "var(--color-neutral-700)", marginTop: "var(--space-4)" }}>
           New to The Daily Lift? <Link to="/signup">Create an account</Link>
+        </div>
+        <div style={{ fontSize: 14, color: "var(--color-neutral-700)", marginTop: "var(--space-2)" }}>
+          Just looking?{" "}
+          <a href="#" onClick={(e) => { e.preventDefault(); if (!busy) signIn(demo); }}>Try the demo</a>
+          {" "}(a shared account, so anyone testing can see it)
         </div>
       </div>
     </div>
