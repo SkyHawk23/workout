@@ -5,7 +5,7 @@ import { useStore } from "../store/useStore.js";
 import { queueSet, flushOutbox } from "../lib/outbox.js";
 import { outboxAll } from "../lib/idb.js";
 import { getOrCreateRunClientId, clearRunClientId } from "../lib/runClientId.js";
-import { genClientId, kicker, setTarget, totalSets } from "../lib/helpers.js";
+import { genClientId, kicker, setTarget, totalSets, youtubeThumbnail } from "../lib/helpers.js";
 import Btn from "../components/Btn.jsx";
 import Dialog from "../components/Dialog.jsx";
 import { useVideoLinks } from "../hooks/useVideoLinks.js";
@@ -15,6 +15,7 @@ export default function Run() {
   const navigate = useNavigate();
   const prefs = useStore((s) => s.prefs);
   const videoLinks = useVideoLinks();
+  const [thumbFailed, setThumbFailed] = useState({}); // {exercise_id: true} once its thumbnail 404s
 
   const [session, setSession] = useState(null);
   const [sessionLogId, setSessionLogId] = useState(null);
@@ -227,8 +228,18 @@ export default function Run() {
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.8px", marginTop: 8 }}>{ex.name}</div>
         <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>{ex.cue}</div>
         {videoLinks[ex.exercise_id] && (
-          <a href={videoLinks[ex.exercise_id]} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontSize: 14, color: "var(--color-accent-700)", marginTop: 8 }}>
-            Watch form video &#8599;
+          <a href={videoLinks[ex.exercise_id]} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 10 }}>
+            {youtubeThumbnail(videoLinks[ex.exercise_id]) && !thumbFailed[ex.exercise_id] ? (
+              <img
+                src={youtubeThumbnail(videoLinks[ex.exercise_id])}
+                alt={`${ex.name} form video`}
+                width={168} height={94}
+                style={{ display: "block", width: 168, height: 94, objectFit: "cover", borderRadius: 8 }}
+                onError={() => setThumbFailed((f) => ({ ...f, [ex.exercise_id]: true }))}
+              />
+            ) : (
+              <span style={{ fontSize: 14, color: "var(--color-accent-700)" }}>Watch form video &#8599;</span>
+            )}
           </a>
         )}
       </div>

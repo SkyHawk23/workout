@@ -29,6 +29,14 @@ export function totalSets(session) {
   return (session.exercises || []).reduce((n, e) => n + (e.sets || []).length, 0);
 }
 
+// Pulls the video id out of a youtube.com/watch?v=ID or youtube.com/shorts/ID
+// url so we can show YouTube's own thumbnail without an <iframe> embed.
+export function youtubeThumbnail(url) {
+  if (!url) return null;
+  const match = url.match(/(?:[?&]v=|\/shorts\/)([\w-]{6,})/);
+  return match ? `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg` : null;
+}
+
 export function listNames(session) {
   return (session.exercises || []).map((e) => e.name).join(" · ");
 }
