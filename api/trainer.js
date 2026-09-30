@@ -287,7 +287,7 @@ async function getProfile(req) {
 // ── Exercise catalog + manual ("build your own") workouts ───────────────
 async function listExercises(req) {
   requireUser(req);
-  const exercises = await sql`select id, name, category, equipment, is_bodyweight from exercises order by name`;
+  const exercises = await sql`select id, name, category, equipment, is_bodyweight, video_url from exercises order by name`;
   return { exercises };
 }
 

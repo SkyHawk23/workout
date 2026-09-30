@@ -4,6 +4,7 @@ import { api } from "../lib/api.js";
 import Btn from "../components/Btn.jsx";
 import { setTarget, totalSets } from "../lib/helpers.js";
 import { useStartWorkout } from "../hooks/useStartWorkout.jsx";
+import { useVideoLinks } from "../hooks/useVideoLinks.js";
 
 export default function Preview() {
   const { id } = useParams();
@@ -11,6 +12,7 @@ export default function Preview() {
   const [session, setSession] = useState(null);
   const [error, setError] = useState("");
   const { begin, modal } = useStartWorkout();
+  const videoLinks = useVideoLinks();
 
   useEffect(() => {
     api("program", "session", { id }).then((res) => setSession(res.session)).catch((err) => setError(err.message));
@@ -32,6 +34,11 @@ export default function Preview() {
               <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, lineHeight: 1.25 }}>{e.name}</div>
               <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 3 }}>{(e.sets || []).length} sets · {setTarget((e.sets || [])[0] || {})}</div>
               <div style={{ fontSize: 14, color: "var(--color-neutral-700)", marginTop: 5, fontStyle: "italic", lineHeight: 1.5 }}>{e.cue}</div>
+              {videoLinks[e.exercise_id] && (
+                <a href={videoLinks[e.exercise_id]} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontSize: 13, color: "var(--color-accent-700)", marginTop: 5 }}>
+                  Watch form video &#8599;
+                </a>
+              )}
             </div>
           </div>
         ))}

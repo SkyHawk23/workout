@@ -8,11 +8,13 @@ import { getOrCreateRunClientId, clearRunClientId } from "../lib/runClientId.js"
 import { genClientId, kicker, setTarget, totalSets } from "../lib/helpers.js";
 import Btn from "../components/Btn.jsx";
 import Dialog from "../components/Dialog.jsx";
+import { useVideoLinks } from "../hooks/useVideoLinks.js";
 
 export default function Run() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const prefs = useStore((s) => s.prefs);
+  const videoLinks = useVideoLinks();
 
   const [session, setSession] = useState(null);
   const [sessionLogId, setSessionLogId] = useState(null);
@@ -224,6 +226,11 @@ export default function Run() {
         <div style={{ fontSize: 13, color: "var(--color-neutral-700)", letterSpacing: "0.06em" }}>Exercise {exIndex + 1} of {exercises.length}</div>
         <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.8px", marginTop: 8 }}>{ex.name}</div>
         <div style={{ fontSize: 15, color: "var(--color-neutral-700)", marginTop: 10, fontStyle: "italic", lineHeight: 1.5 }}>{ex.cue}</div>
+        {videoLinks[ex.exercise_id] && (
+          <a href={videoLinks[ex.exercise_id]} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", fontSize: 14, color: "var(--color-accent-700)", marginTop: 8 }}>
+            Watch form video &#8599;
+          </a>
+        )}
       </div>
 
       <div style={{ marginTop: "var(--space-6)", paddingTop: "var(--space-4)", borderTop: "1px solid var(--color-divider)" }}>
